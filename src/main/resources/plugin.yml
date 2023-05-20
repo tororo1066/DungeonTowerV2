@@ -1,0 +1,19 @@
+name: DungeonTowerReMake
+version: '${version}'
+main: tororo1066.dungeontower.DungeonTower
+api-version: 1.17
+
+depend:
+  - MythicMobs
+softdepend:
+  - Multiverse-Core
+  - Multiverse-Portals
+  - MultiWorld
+commands:
+  dungeon:
+    aliases:
+      - tower
+      - dt
+  dungeontask:
+    aliases:
+      - dtask
