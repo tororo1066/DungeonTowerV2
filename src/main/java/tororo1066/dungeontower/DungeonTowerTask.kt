@@ -243,12 +243,6 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
         sleep(3000)
 
         while (!end){
-            if (nowFloor.clearTask.none { !it.clear }){
-                party.actionBar(SStr("&a&l道が開いた！§d§l(${nextFloorPlayers.size}/${party.alivePlayers.size/2})"))
-            } else {
-                party.actionBar(SStr("&c&l何かをしないといけない..."))
-            }
-
             scoreboard = Bukkit.getScoreboardManager().newScoreboard
 
             val obj = scoreboard.registerNewObjective("DungeonTower","Dummy", Component.text(tower.internalName))
