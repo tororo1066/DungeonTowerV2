@@ -10,37 +10,41 @@ import org.bukkit.event.player.PlayerQuitEvent
 import tororo1066.dungeontower.command.DungeonCommand
 import tororo1066.dungeontower.command.DungeonTaskCommand
 import tororo1066.dungeontower.data.*
+import tororo1066.dungeontower.sql.DungeonTowerLogSQL
+import tororo1066.dungeontower.sql.DungeonTowerPartyLogSQL
 import tororo1066.tororopluginapi.SInput
 import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
+import tororo1066.tororopluginapi.mysql.SMySQL
 import tororo1066.tororopluginapi.sEvent.SEvent
 import tororo1066.tororopluginapi.utils.sendMessage
 import java.util.UUID
 
-class DungeonTower: SJavaPlugin(UseOption.SConfig) {
+class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
 
     companion object{
         lateinit var plugin: DungeonTower
-        var nowX = 0
-        var xLimit = 10000000
-        var y = 1
+        var nowX = 0 //ダンジョンができるごとにこの値はダンジョンのx分増える
+        var dungeonXSpace = 5 //ダンジョンごとの間隔 近すぎると弊害があるときには空けるべき
+        var xLimit = 10000 //nowXがこの数字を上回ったときにnowXを0にする 無駄すぎるチャンク生成を控える
+        var y = 1 //ダンジョンのyの高さ
         var lobbyLocation: Location = Location(null,0.0,0.0,0.0)
 
         lateinit var dungeonWorld: World
         lateinit var floorWorld: World
 
-        var createFloorNow = false
+        var createFloorNow = false //フロアが作成中かどうか 作成中は処理を一時停止する
 
         val prefix = SStr("&b[&4Dungeon&cTower&b]&r")
-        lateinit var mythic: BukkitAPIHelper
-        lateinit var sInput: SInput
+        lateinit var mythic: BukkitAPIHelper //スポナーでmmのmobを湧かすために使用
+        lateinit var sInput: SInput //入力マネージャー
 
-        val lootData = HashMap<String,LootData>()
-        val spawnerData = HashMap<String,SpawnerData>()
-        val floorData = HashMap<String,FloorData>()
-        val towerData = HashMap<String,TowerData>()
-        val partiesData = HashMap<UUID,PartyData?>()
-        val playNow = ArrayList<UUID>()
+        val lootData = HashMap<String,LootData>() //宝箱のデータ
+        val spawnerData = HashMap<String,SpawnerData>() //スポナーのデータ
+        val floorData = HashMap<String,FloorData>() //フロアのデータ
+        val towerData = HashMap<String,TowerData>() //塔のデータ
+        val partiesData = HashMap<UUID,PartyData?>() //パーティのデータ PartyDataがnullじゃない人がリーダー
+        val playNow = ArrayList<UUID>() //ダンジョンに挑戦中のプレイヤー
 
         fun CommandSender.sendPrefixMsg(str: SStr){
             this.sendMessage(prefix + str)
@@ -48,11 +52,16 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
 
         fun reloadDungeonConfig(){
             plugin.reloadConfig()
-            xLimit = plugin.config.getInt("xLimit",10000000)
-            y = plugin.config.getInt("y",1)
+            xLimit = plugin.config.getInt("xLimit",10000)
+            y = plugin.config.getInt("y",5)
             Bukkit.getWorld(plugin.config.getString("dungeonWorld","dungeon")!!)?.let { dungeonWorld = it }
             Bukkit.getWorld(plugin.config.getString("floorWorld","world")!!)?.let { floorWorld = it }
             lobbyLocation = plugin.config.getLocation("lobbyLocation", Location(null,0.0,0.0,0.0))!!
+            dungeonXSpace = plugin.config.getInt("dungeonXSpace",1)
+
+            mysql = SMySQL(plugin)
+            DungeonTowerLogSQL()
+            DungeonTowerPartyLogSQL()
         }
     }
 
@@ -62,21 +71,25 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         sInput = SInput(this)
         reloadDungeonConfig()
 
+        sConfig.mkdirs("floors")
         sConfig.loadAllFiles("floors").forEach {
             val floor = FloorData.loadFromYml(it)
             floorData[floor.first] = floor.second
         }
 
+        sConfig.mkdirs("loots")
         sConfig.loadAllFiles("loots").forEach {
             val loot = LootData.loadFromYml(it)
             lootData[loot.first] = loot.second
         }
 
+        sConfig.mkdirs("spawners")
         sConfig.loadAllFiles("spawners").forEach {
             val spawner = SpawnerData.loadFromYml(it)
             spawnerData[spawner.first] = spawner.second
         }
 
+        sConfig.mkdirs("towers")
         sConfig.loadAllFiles("towers").forEach {
             val tower = TowerData.loadFromYml(it)
             towerData[tower.first] = tower.second

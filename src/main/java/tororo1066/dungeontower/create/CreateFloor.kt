@@ -17,34 +17,68 @@ import tororo1066.tororopluginapi.utils.LocType
 import tororo1066.tororopluginapi.utils.toLocString
 import java.io.File
 
-class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJavaPlugin.plugin, data.includeName) {
+class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJavaPlugin.plugin, data.internalName) {
 
-    val commandClearTask = FloorData.ClearTask(FloorData.ClearTaskEnum.ENTER_COMMAND)
+    val tasks = HashMap<FloorData.ClearTaskEnum,FloorData.ClearTask>(FloorData.ClearTaskEnum.values().associateBy({it},{ FloorData.ClearTask(it)}))
+
 
     override fun renderMenu(p: Player): Boolean {
+        fun settingScoreboard(taskEnum: FloorData.ClearTaskEnum): SInventoryItem {
+            val task = tasks[taskEnum]!!
+            return createInputItem(SItem(Material.DIAMOND_BLOCK).setDisplayName("§aスコアボードの表示を設定する")
+                .addLore("§d現在の値: ${task.scoreBoardName}")
+                .addLore("§e<spawnerNavigateNeed> §7モブを倒さないといけない数")
+                .addLore("§e<spawnerNavigateCount> §7ゲーム中のモブを倒した数")
+                .addLore("§e<gimmickNeed> §7dtaskを達成しないといけない数")
+                .addLore("§e<gimmickCount> §7ゲーム中にdtaskを実行した回数"),String::class.java,"/<文字>") { str, _ ->
+
+                task.scoreBoardName = str
+                val dataTask = data.clearTask.find { it.type == taskEnum }
+                if (dataTask != null){
+                    dataTask.scoreBoardName = str
+                }
+            }
+        }
+
         val items = arrayListOf(
             SInventoryItem(Material.REDSTONE_BLOCK).setDisplayName("§aクリアに必要なタスクを設定する")
                 .addLore("§d現在の値: ${data.clearTask.map { it.type.name }}").setCanClick(false)
                 .setClickEvent {
                     val settingInv = object : LargeSInventory(SJavaPlugin.plugin, "タスクを設定する") {
                         override fun renderMenu(p: Player): Boolean {
+                            val commandClearTask = tasks[FloorData.ClearTaskEnum.ENTER_COMMAND]!!
                             val items = arrayListOf(
                                 SInventoryItem(Material.PLAYER_HEAD).setDisplayName("§aモブを倒す")
                                     .addLore("§d現在の値: ${if (!data.clearTask.none 
                                         { it.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }) "§f§l[§a§l有効§f§l]" else "§f§l[§c§l無効§f§l]"}")
                                     .setCanClick(false).setClickEvent {
-                                        if (data.clearTask.none { it.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }){
-                                            data.clearTask.add(FloorData.ClearTask(FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS))
-                                        } else {
-                                            data.clearTask.removeIf { it.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }
+                                        val settingInv = object : LargeSInventory(SJavaPlugin.plugin, "設定") {
+                                            override fun renderMenu(p: Player): Boolean {
+                                                val items = arrayListOf(
+                                                    SInventoryItem(Material.EMERALD_BLOCK).setDisplayName("§a有効切り替え")
+                                                        .addLore("§d現在の値: ${if (!data.clearTask.none
+                                                            { it.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }) "§f§l[§a§l有効§f§l]" else "§f§l[§c§l無効§f§l]"}")
+                                                        .setCanClick(false).setClickEvent {
+                                                            if (data.clearTask.none { it.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }){
+                                                                data.clearTask.add(commandClearTask)
+                                                            } else {
+                                                                data.clearTask.removeIf { it.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }
+                                                            }
+                                                            allRenderMenu(p)
+                                                        },
+                                                    settingScoreboard(FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS)
+                                                )
+                                                setResourceItems(items)
+                                                return true
+                                            }
                                         }
-                                        allRenderMenu(p)
+                                        moveChildInventory(settingInv,p)
                                     },
                                 SInventoryItem(Material.COMMAND_BLOCK).setDisplayName("§aコマンドを実行する")
                                     .addLore("§d現在の値: ${if (!data.clearTask.none 
                                         { it.type == FloorData.ClearTaskEnum.ENTER_COMMAND }) "§f§l[§a§l有効§f§l]" else "§f§l[§c§l無効§f§l]"}")
                                     .setCanClick(false).setClickEvent {
-                                        val settingInv = object : LargeSInventory(SJavaPlugin.plugin, "コマンドタスク") {
+                                        val settingInv = object : LargeSInventory(SJavaPlugin.plugin, "設定") {
                                             override fun renderMenu(p: Player): Boolean {
                                                 val items = arrayListOf(
                                                     SInventoryItem(Material.EMERALD_BLOCK).setDisplayName("§a有効切り替え")
@@ -59,13 +93,15 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                                                             allRenderMenu(p)
                                                         },
                                                     createInputItem(SItem(Material.DIAMOND_BLOCK).setDisplayName("§a実行回数を設定する")
-                                                        .addLore("§d現在の値: ${commandClearTask.need}"),Int::class.java,"/<実行回数>") { int, _ ->
+                                                        .addLore("§d現在の値: ${commandClearTask.need}")
+                                                        .addLore("§e/dtask PlayerInRadius{<半径>}か/dtask <プレイヤー名>でカウントされる"),Int::class.java,"/<実行回数>") { int, _ ->
                                                         commandClearTask.need = int
                                                         val commandTask = data.clearTask.find { it.type == FloorData.ClearTaskEnum.ENTER_COMMAND }
                                                         if (commandTask != null){
                                                             commandTask.need = int
                                                         }
-                                                    }
+                                                    },
+                                                    settingScoreboard(FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS)
 
                                                 )
                                                 setResourceItems(items)
@@ -122,8 +158,8 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
             })
             items.add(SInventoryItem(Material.BARRIER).setDisplayName("§cシフト右クリックで削除する").setClickEvent {
                 if (it.click != ClickType.SHIFT_RIGHT)return@setClickEvent
-                File(SJavaPlugin.plugin.dataFolder.path + "/floors/${data.includeName}.yml").delete()
-                DungeonTower.floorData.remove(data.includeName)
+                File(SJavaPlugin.plugin.dataFolder.path + "/floors/${data.internalName}.yml").delete()
+                DungeonTower.floorData.remove(data.internalName)
                 DungeonCommand()
                 p.sendPrefixMsg(SStr("&a削除しました"))
                 p.closeInventory()
@@ -146,7 +182,7 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
             data.startLoc = endLoc
             data.endLoc = startLoc
         }
-        val config = SJavaPlugin.sConfig.getConfig("floors/${data.includeName}")?: YamlConfiguration()
+        val config = SJavaPlugin.sConfig.getConfig("floors/${data.internalName}")?: YamlConfiguration()
         config.set("startLoc",data.startLoc.toLocString(LocType.BLOCK_COMMA))
         config.set("endLoc",data.endLoc.toLocString(LocType.BLOCK_COMMA))
         val clearTasks = ArrayList<String>()
@@ -162,9 +198,9 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
         }
         config.set("clearTasks",clearTasks)
         config.set("joinCommands",data.joinCommands)
-        if (SJavaPlugin.sConfig.saveConfig(config,"floors/${data.includeName}")){
+        if (SJavaPlugin.sConfig.saveConfig(config,"floors/${data.internalName}")){
+            DungeonTower.floorData[data.internalName] = data
             DungeonCommand()
-            DungeonTower.floorData[data.includeName] = data
             p.sendPrefixMsg(SStr("&a保存に成功しました"))
         } else {
             p.sendPrefixMsg(SStr("&c保存に失敗しました"))

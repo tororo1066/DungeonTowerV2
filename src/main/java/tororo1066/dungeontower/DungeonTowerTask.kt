@@ -1,15 +1,19 @@
 package tororo1066.dungeontower
 
 import com.destroystokyo.paper.event.player.PlayerStopSpectatingEntityEvent
+import net.kyori.adventure.text.Component
 import org.bukkit.*
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.Inventory
 import org.bukkit.persistence.PersistentDataType
+import org.bukkit.scoreboard.DisplaySlot
 import tororo1066.dungeontower.data.FloorData
 import tororo1066.dungeontower.data.PartyData
 import tororo1066.dungeontower.data.TowerData
+import tororo1066.dungeontower.sql.DungeonTowerLogSQL
+import tororo1066.dungeontower.sql.DungeonTowerPartyLogSQL
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.sEvent.SEvent
 import tororo1066.tororopluginapi.utils.toPlayer
@@ -47,13 +51,14 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
         }
     }
 
-    var nowFloorNum = 1
+    private var nowFloorNum = 1
     lateinit var nowFloor: FloorData
     private val sEvent = SEvent(DungeonTower.plugin)
     private val nextFloorPlayers = ArrayList<UUID>()
-    lateinit var nowThread: Thread
+    private lateinit var nowThread: Thread
+    private var scoreboard = Bukkit.getScoreboardManager().newScoreboard
 
-    var end = false
+    private var end = false
 
     private fun runTask(unit: ()->Unit){
         val lock = Lock()
@@ -99,18 +104,28 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
         })
     }
 
+    private fun end(){
+        nowFloor.removeFloor()
+        end = true
+        sEvent.unregisterAll()
+        scoreboard.getObjective("DungeonTower")?.unregister()
+        nowThread.interrupt()
+    }
+
     override fun run() {
         if (party.players.size == 0)return
+        DungeonTowerPartyLogSQL.insert(party)
+        DungeonTowerLogSQL.enterDungeon(party, tower.internalName)
         nowThread = this
         party.nowTask = this
         party.broadCast(SStr("&c${tower.name}&aにテレポート中..."))
-        runTask { party.smokeStan(60) }
         nowFloor = tower.randomFloor(nowFloorNum)
 
         while (DungeonTower.createFloorNow){
             sleep(1)
         }
         runTask { nowFloor.callFloor() }
+        runTask { party.smokeStan(60) }
         runTask { party.teleport(nowFloor.preventFloorStairs.first().add(0.0,1.0,0.0)) }
         callCommand(nowFloor)
         //eventでthreadをlockするの使わないで
@@ -122,6 +137,7 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
             clearDungeonItems(e.player.inventory)
             data.isAlive = false
             party.broadCast(SStr("&c&l${e.player.name}が死亡した..."))
+            e.player.spigot().respawn()
             for (p in party.players) {
                 if (p.value.isAlive){
                     e.player.gameMode = GameMode.SPECTATOR
@@ -132,6 +148,7 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
 
             if (party.alivePlayers.isEmpty()){
                 party.broadCast(SStr("&c&l全滅してしまった..."))
+                DungeonTowerLogSQL.annihilationDungeon(party, tower.internalName)
                 Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
                     party.teleport(DungeonTower.lobbyLocation)
                     party.players.keys.forEach { uuid ->
@@ -141,10 +158,7 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
                         DungeonTower.partiesData.remove(uuid)
                         DungeonTower.playNow.remove(uuid)
                     }
-                    nowFloor.removeFloor()
-                    end = true
-                    sEvent.unregisterAll()
-                    nowThread.interrupt()
+                    end()
                 },60)
             }
         }
@@ -170,11 +184,12 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
 
             DungeonTower.playNow.remove(e.player.uniqueId)
 
-            if (party.players.isEmpty()){
-                nowFloor.removeFloor()
-                end = true
-                sEvent.unregisterAll()
-                nowThread.interrupt()
+            e.player.teleport(DungeonTower.lobbyLocation)
+
+            if (party.alivePlayers.isEmpty()){
+                DungeonTowerLogSQL.quitDisbandDungeon(party, tower.internalName)
+                end()
+                return@register
             }
         }
         sEvent.register(PlayerMoveEvent::class.java){ e ->
@@ -204,12 +219,11 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
                     if (!nowFloor.lastFloor)return@register//どこでもクリアできるっていうのも面白いかもしれない
                     nextFloorPlayers.add(e.player.uniqueId)
                     if (party.alivePlayers.size / 2 < nextFloorPlayers.size){
+                        DungeonTowerLogSQL.clearDungeon(party, tower.internalName)
                         party.broadCast(SStr("&a&lクリア！"))
                         party.alivePlayers.keys.forEach {
                             dungeonItemToItem(it.toPlayer()?.inventory?:return@forEach)
                         }
-                        end = true
-                        sEvent.unregisterAll()
                         party.teleport(DungeonTower.lobbyLocation)
                         party.players.keys.forEach { uuid ->
                             if (uuid.toPlayer()?.gameMode == GameMode.SPECTATOR){
@@ -218,8 +232,7 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
                             DungeonTower.partiesData.remove(uuid)
                             DungeonTower.playNow.remove(uuid)
                         }
-                        nowFloor.removeFloor()
-                        nowThread.interrupt()
+                        end()
                     }
                 }
                 else->{}
@@ -231,12 +244,44 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
 
         while (!end){
             if (nowFloor.clearTask.none { !it.clear }){
-                party.actionBar(SStr("&a&l道が開いた！"))
+                party.actionBar(SStr("&a&l道が開いた！§d§l(${nextFloorPlayers.size}/${party.alivePlayers.size/2})"))
             } else {
                 party.actionBar(SStr("&c&l何かをしないといけない..."))
             }
 
-            sleep(200)
+            scoreboard = Bukkit.getScoreboardManager().newScoreboard
+
+            val obj = scoreboard.registerNewObjective("DungeonTower","Dummy", Component.text(tower.internalName))
+            obj.displaySlot = DisplaySlot.SIDEBAR
+
+            obj.getScore("§6タスク").score = 0
+            var scoreInt = 1
+            nowFloor.clearTask.forEach {
+                val replace = it.scoreBoardName
+                    .replace("<spawnerNavigateNeed>", nowFloor.clearTask
+                        .filter { fil -> fil.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }
+                        .sumOf { map -> map.need }.toString())
+                    .replace("<spawnerNavigateCount>",nowFloor.clearTask
+                        .filter { fil -> fil.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }
+                        .sumOf { map -> map.count }.toString())
+                    .replace("<gimmickNeed>",nowFloor.clearTask
+                        .find { find -> find.type == FloorData.ClearTaskEnum.ENTER_COMMAND }
+                        ?.need.toString())
+                    .replace("<gimmickCount>",nowFloor.clearTask
+                        .find { find -> find.type == FloorData.ClearTaskEnum.ENTER_COMMAND }
+                        ?.count.toString())
+
+                obj.getScore(replace).score = scoreInt
+                scoreInt++
+            }
+
+            party.scoreboard(scoreboard)
+
+            try {
+                sleep(1000)
+            } catch (_: InterruptedException){
+
+            }
         }
 
 

@@ -15,7 +15,6 @@ import tororo1066.dungeontower.create.CreateSpawner
 import tororo1066.dungeontower.data.*
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.annotation.SCommandBody
-import tororo1066.tororopluginapi.lang.SLang
 import tororo1066.tororopluginapi.otherClass.StrExcludeFileIllegalCharacter
 import tororo1066.tororopluginapi.sCommand.SCommand
 import tororo1066.tororopluginapi.sCommand.SCommandArg
@@ -37,7 +36,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
         }
     }
 
-    fun CommandSender.checkIllegal(string: String): Boolean {
+    private fun CommandSender.checkIllegal(string: String): Boolean {
         if (StrExcludeFileIllegalCharacter(string).nullableString == null){
             this.sendPrefixMsg(SStr("&c${string}は使用できません"))
             return false
@@ -271,7 +270,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
             val endLoc = secondLoc.split(",").map { map -> map.toDouble() }
 
             val data = FloorData()
-            data.includeName = it.args[2]
+            data.internalName = it.args[2]
             data.startLoc = Location(DungeonTower.floorWorld,startLoc[0],startLoc[1],startLoc[2])
             data.endLoc = Location(DungeonTower.floorWorld,endLoc[0],endLoc[1],endLoc[2])
             CreateFloor(data,false).open(it.sender)
@@ -319,7 +318,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
             }
 
             val data = LootData()
-            data.includeName = it.args[2]
+            data.internalName = it.args[2]
             CreateLoot(data,false).open(it.sender)
         }
 
@@ -346,7 +345,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
             }
 
             val data = SpawnerData()
-            data.includeName = it.args[2]
+            data.internalName = it.args[2]
             CreateSpawner(data,false).open(it.sender)
         }
 
@@ -373,7 +372,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
             }
 
             val data = TowerData()
-            data.includeName = it.args[2]
+            data.internalName = it.args[2]
             CreateTower(data,false).open(it.sender)
         }
 

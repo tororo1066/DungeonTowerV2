@@ -16,7 +16,7 @@ import tororo1066.tororopluginapi.sInventory.SInventoryItem
 import tororo1066.tororopluginapi.sItem.SItem
 import java.io.File
 
-class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJavaPlugin.plugin, data.includeName) {
+class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJavaPlugin.plugin, data.internalName) {
 
     override fun renderMenu(p: Player): Boolean {
         val items = arrayListOf(
@@ -61,8 +61,8 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJava
             })
             items.add(SInventoryItem(Material.BARRIER).setDisplayName("§cシフト右クリックで削除する").setClickEvent {
                 if (it.click != ClickType.SHIFT_RIGHT)return@setClickEvent
-                File(SJavaPlugin.plugin.dataFolder.path + "/loots/${data.includeName}.yml").delete()
-                DungeonTower.lootData.remove(data.includeName)
+                File(SJavaPlugin.plugin.dataFolder.path + "/loots/${data.internalName}.yml").delete()
+                DungeonTower.lootData.remove(data.internalName)
                 DungeonCommand()
                 p.sendPrefixMsg(SStr("&a削除しました"))
                 p.closeInventory()
@@ -79,7 +79,7 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJava
     }
 
     private fun save(p: Player){
-        val config = SJavaPlugin.sConfig.getConfig("loots/${data.includeName}")?: YamlConfiguration()
+        val config = SJavaPlugin.sConfig.getConfig("loots/${data.internalName}")?: YamlConfiguration()
         config.set("roll",data.rollAmount)
         val itemStacks = ArrayList<ItemStack>()
         val chances = ArrayList<Int>()
@@ -92,8 +92,8 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJava
         config.set("items",itemStacks)
         config.set("chances",chances)
         config.set("amounts",amounts)
-        if (SJavaPlugin.sConfig.saveConfig(config,"loots/${data.includeName}")){
-            DungeonTower.lootData[data.includeName] = data
+        if (SJavaPlugin.sConfig.saveConfig(config,"loots/${data.internalName}")){
+            DungeonTower.lootData[data.internalName] = data
             DungeonCommand()
             p.sendPrefixMsg(SStr("&a保存に成功しました"))
         } else {

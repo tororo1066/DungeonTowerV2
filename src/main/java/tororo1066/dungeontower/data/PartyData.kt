@@ -3,6 +3,7 @@ package tororo1066.dungeontower.data
 import org.bukkit.Location
 import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
+import org.bukkit.scoreboard.Scoreboard
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.DungeonTowerTask
 import tororo1066.tororopluginapi.SStr
@@ -14,6 +15,7 @@ class PartyData: Cloneable {
     val players = HashMap<UUID,UserData>()
     lateinit var parent: UUID
     var nowTask: DungeonTowerTask? = null
+    val partyUUID: UUID = UUID.randomUUID()
     val alivePlayers: HashMap<UUID,UserData> get() {
         return HashMap(players.filter { it.value.isAlive })
     }
@@ -42,6 +44,12 @@ class PartyData: Cloneable {
     fun actionBar(str: SStr){
         players.keys.forEach {
             it.toPlayer()?.sendActionBar(str.toPaperComponent())
+        }
+    }
+
+    fun scoreboard(scoreboard: Scoreboard){
+        players.keys.forEach {
+            it.toPlayer()?.scoreboard = scoreboard
         }
     }
 

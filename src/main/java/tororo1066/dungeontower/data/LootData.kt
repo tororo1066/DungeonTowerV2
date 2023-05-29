@@ -15,7 +15,8 @@ import java.util.*
 
 class LootData: LootTable, Cloneable {
 
-    var includeName = ""
+    //内部名
+    var internalName = ""
     val items = ArrayList<Triple<Int,IntRange, SItem>>()//確率、個数、ItemStack
     var rollAmount = 0
     var displayName = ""
@@ -62,7 +63,7 @@ class LootData: LootTable, Cloneable {
     }
 
     override fun getKey(): NamespacedKey {
-        return NamespacedKey(DungeonTower.plugin,includeName)
+        return NamespacedKey(DungeonTower.plugin,internalName)
     }
 
     public override fun clone(): LootData {
@@ -73,18 +74,19 @@ class LootData: LootTable, Cloneable {
         @Suppress("UNCHECKED_CAST")
         fun loadFromYml(file: File): Pair<String, LootData> {
             val yml = YamlConfiguration.loadConfiguration(file)
-            val data = LootData()
-            data.includeName = file.nameWithoutExtension
-            data.rollAmount = yml.getInt("roll")
-            data.displayName = yml.getString("displayName")?:"DungeonTowerLootChest"
-            val items = yml.getList("items") as List<ItemStack>
-            val amounts = yml.getStringList("amounts").map { it.split("to")[0].toInt()..it.split("to")[1].toInt() }
-            val chances = yml.getIntegerList("chances")
-            for (i in items.indices){
-                data.items.add(Triple(chances[i],amounts[i], SItem(items[i])))
+            val data = LootData().apply {
+                internalName = file.nameWithoutExtension
+                rollAmount = yml.getInt("roll")
+                displayName = yml.getString("displayName")?:"DungeonTowerLootChest"
+                val configItems = yml.getList("items") as List<ItemStack>
+                val amounts = yml.getStringList("amounts").map { it.split("to")[0].toInt()..it.split("to")[1].toInt() }
+                val chances = yml.getIntegerList("chances")
+                for (i in configItems.indices){
+                    items.add(Triple(chances[i],amounts[i], SItem(configItems[i])))
+                }
             }
 
-            return Pair(data.includeName, data)
+            return Pair(data.internalName, data)
         }
     }
 }

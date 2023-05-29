@@ -7,7 +7,7 @@ import java.io.File
 
 class SpawnerData: Cloneable {
 
-    var includeName = ""
+    var internalName = ""
     var mob: MythicMob? = null
     var count = 0
     var coolTime = 0
@@ -26,16 +26,18 @@ class SpawnerData: Cloneable {
     companion object{
         fun loadFromYml(file: File): Pair<String, SpawnerData> {
             val yml = YamlConfiguration.loadConfiguration(file)
-            val data = SpawnerData()
-            data.includeName = file.nameWithoutExtension
-            data.mob = DungeonTower.mythic.getMythicMob(yml.getString("mob"))?:null
-            data.coolTime = yml.getInt("cooltime")
-            data.max = yml.getInt("max")
-            data.radius = yml.getInt("radius")
-            data.level = yml.getDouble("level")
-            data.activateRange = yml.getInt("activateRange")
-            data.navigateKill = yml.getInt("navigate")
-            return Pair(data.includeName, data)
+            val data = SpawnerData().apply {
+                internalName = file.nameWithoutExtension
+                mob = DungeonTower.mythic.getMythicMob(yml.getString("mob"))?:null
+                coolTime = yml.getInt("cooltime")
+                max = yml.getInt("max")
+                radius = yml.getInt("radius")
+                level = yml.getDouble("level")
+                activateRange = yml.getInt("activateRange")
+                navigateKill = yml.getInt("navigate")
+            }
+
+            return Pair(data.internalName, data)
         }
     }
 }

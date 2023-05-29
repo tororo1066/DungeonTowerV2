@@ -1,0 +1,12 @@
+xLimit: 10000
+dungeonXSpace: 1
+y: 1
+dungeonWorld: dungeon
+floorWorld: world
+
+mysql:
+  host: localhost
+  port: 3306
+  user: root
+  pass: pass
+  db: dungeon_tower

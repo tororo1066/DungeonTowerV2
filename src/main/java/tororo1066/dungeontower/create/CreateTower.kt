@@ -15,7 +15,7 @@ import tororo1066.tororopluginapi.sInventory.SInventoryItem
 import tororo1066.tororopluginapi.sItem.SItem
 import java.io.File
 
-class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJavaPlugin.plugin, data.includeName) {
+class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJavaPlugin.plugin, data.internalName) {
 
     override fun renderMenu(p: Player): Boolean {
         val items = arrayListOf(
@@ -35,7 +35,7 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
                                     override fun renderMenu(p: Player): Boolean {
                                         val newItems = arrayListOf<SInventoryItem>()
                                         data.floors[int]!!.forEach { pair ->
-                                            newItems.add(SInventoryItem(Material.REDSTONE_BLOCK).setDisplayName("§d確率:${pair.first}/1000000§f,§6フロア:${pair.second.includeName}").addLore("§cシフト左クリックで削除").setCanClick(false).setClickEvent second@ { e ->
+                                            newItems.add(SInventoryItem(Material.REDSTONE_BLOCK).setDisplayName("§d確率:${pair.first}/1000000§f,§6フロア:${pair.second.internalName}").addLore("§cシフト左クリックで削除").setCanClick(false).setClickEvent second@ { e ->
                                                 if (e.click != ClickType.SHIFT_LEFT)return@second
                                                 data.floors[int]!!.remove(pair)
                                                 allRenderMenu(p)
@@ -81,8 +81,8 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
             })
             items.add(SInventoryItem(Material.BARRIER).setDisplayName("§cシフト右クリックで削除する").setClickEvent {
                 if (it.click != ClickType.SHIFT_RIGHT)return@setClickEvent
-                File(SJavaPlugin.plugin.dataFolder.path + "/towers/${data.includeName}.yml").delete()
-                DungeonTower.towerData.remove(data.includeName)
+                File(SJavaPlugin.plugin.dataFolder.path + "/towers/${data.internalName}.yml").delete()
+                DungeonTower.towerData.remove(data.internalName)
                 DungeonCommand()
                 p.sendPrefixMsg(SStr("&a削除しました"))
                 p.closeInventory()
@@ -99,19 +99,19 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
     }
 
     private fun save(p: Player){
-        val config = SJavaPlugin.sConfig.getConfig("towers/${data.includeName}")?:YamlConfiguration()
+        val config = SJavaPlugin.sConfig.getConfig("towers/${data.internalName}")?:YamlConfiguration()
         config.set("name",data.name)
         config.set("partyLimit",data.partyLimit)
 
         data.floors.forEach { (floorNum, array) ->
             val list = ArrayList<String>()
             array.forEach {
-                list.add("${it.first},${it.second.includeName}")
+                list.add("${it.first},${it.second.internalName}")
             }
             config.set("floors.${floorNum}f",list)
         }
-        if (SJavaPlugin.sConfig.saveConfig(config,"towers/${data.includeName}")){
-            DungeonTower.towerData[data.includeName] = data
+        if (SJavaPlugin.sConfig.saveConfig(config,"towers/${data.internalName}")){
+            DungeonTower.towerData[data.internalName] = data
             DungeonCommand()
             p.sendPrefixMsg(SStr("&a保存に成功しました"))
         } else {

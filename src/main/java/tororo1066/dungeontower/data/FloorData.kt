@@ -1,5 +1,14 @@
 package tororo1066.dungeontower.data
 
+import com.sk89q.worldedit.WorldEdit
+import com.sk89q.worldedit.bukkit.BukkitWorld
+import com.sk89q.worldedit.extent.clipboard.BlockArrayClipboard
+import com.sk89q.worldedit.function.operation.ForwardExtentCopy
+import com.sk89q.worldedit.function.operation.Operations
+import com.sk89q.worldedit.math.BlockVector3
+import com.sk89q.worldedit.regions.CuboidRegion
+import com.sk89q.worldedit.session.ClipboardHolder
+import com.sk89q.worldedit.world.block.BlockTypes
 import io.lumine.mythic.bukkit.BukkitAdapter
 import io.lumine.mythic.bukkit.events.MythicMobDeathEvent
 import org.bukkit.*
@@ -16,24 +25,25 @@ import tororo1066.dungeontower.DungeonTower
 import tororo1066.tororopluginapi.sEvent.SEvent
 import java.io.File
 import java.util.*
-import kotlin.collections.ArrayList
 import kotlin.math.abs
 import kotlin.math.min
 
 class FloorData: Cloneable {
 
-    enum class ClearTaskEnum{
+    enum class ClearTaskEnum {
         KILL_SPAWNER_MOBS,
         ENTER_COMMAND
     }
 
-    class ClearTask(val type: ClearTaskEnum,var need: Int = 0, var count: Int = 0, var clear: Boolean = false): Cloneable{
+    class ClearTask(val type: ClearTaskEnum,var need: Int = 0,
+                    var count: Int = 0, var clear: Boolean = false,
+                    var scoreBoardName: String = ""): Cloneable {
         public override fun clone(): ClearTask {
             return super.clone() as ClearTask
         }
     }
 
-    var includeName = ""
+    var internalName = ""
 
     lateinit var startLoc: Location
     lateinit var endLoc: Location
@@ -43,7 +53,7 @@ class FloorData: Cloneable {
     var lastFloor = true
 
     val preventFloorStairs = ArrayList<Location>()
-    val nextFloorStairs = ArrayList<Location>()
+    val nextFloorStairs = ArrayList<Location>()//使わないかもしれない
     val spawners = ArrayList<BukkitTask>()
 
     val joinCommands = ArrayList<String>()
@@ -62,15 +72,29 @@ class FloorData: Cloneable {
 
         dungeonStartLoc = Location(DungeonTower.dungeonWorld, DungeonTower.nowX.toDouble(), DungeonTower.y.toDouble(), 0.0)
 
+        val region = CuboidRegion(
+            BukkitWorld(DungeonTower.floorWorld),
+            BlockVector3.at(lowX,lowY,lowZ),
+            BlockVector3.at(highX,highY,highZ))
+        val clipboard = BlockArrayClipboard(region)
+        val forwardExtentCopy = ForwardExtentCopy(BukkitWorld(DungeonTower.floorWorld), region, clipboard, region.minimumPoint)
+        Operations.complete(forwardExtentCopy)
+
+        WorldEdit.getInstance().newEditSession(BukkitWorld(DungeonTower.dungeonWorld)).use {
+            val operation = ClipboardHolder(clipboard)
+                .createPaste(it)
+                .to(BlockVector3.at(DungeonTower.nowX,DungeonTower.y,0))
+                .ignoreAirBlocks(true)
+                .build()
+            Operations.complete(operation)
+        }
+
+
         for ((indexX, x) in (lowX..highX).withIndex()){
             for ((indexY, y) in (lowY..highY).withIndex()){
                 for ((indexZ, z) in (lowZ..highZ).withIndex()){
                     val block = DungeonTower.floorWorld.getBlockAt(x,y,z)
                     val placeLoc = dungeonStartLoc!!.clone().add(indexX.toDouble(),indexY.toDouble(),indexZ.toDouble())
-                    placeLoc.block.type = block.type
-                    placeLoc.block.blockData = block.blockData
-                    placeLoc.block.state.data = DungeonTower.floorWorld.getBlockState(x,y,z).data
-                    placeLoc.block.state.update()
 
                     when(block.type){
 
@@ -167,11 +191,11 @@ class FloorData: Cloneable {
             }
         }
 
-        DungeonTower.createFloorNow = false
-        DungeonTower.nowX += abs(highX - lowX) + 1
+        DungeonTower.nowX += abs(highX - lowX) + DungeonTower.dungeonXSpace
         if (DungeonTower.xLimit <= DungeonTower.nowX){
             DungeonTower.nowX = 0
         }
+        DungeonTower.createFloorNow = false
         return
     }
 
@@ -188,17 +212,19 @@ class FloorData: Cloneable {
         val highY = if (lowY == startLoc.blockY) endLoc.blockY else startLoc.blockY
         val highZ = if (lowZ == startLoc.blockZ) endLoc.blockZ else startLoc.blockZ
 
-        for ((indexX, _) in (lowX..highX).withIndex()){
-            for ((indexY, _) in (lowY..highY).withIndex()){
-                for ((indexZ, _) in (lowZ..highZ).withIndex()){
-                    val placeLoc = dungeonStartLoc!!.clone().add(indexX.toDouble(),indexY.toDouble(),indexZ.toDouble())
-                    placeLoc.block.type = Material.AIR
-                }
-            }
+        WorldEdit.getInstance().newEditSession(BukkitWorld(DungeonTower.dungeonWorld)).use {
+            val x = dungeonStartLoc!!.blockX
+            val y = dungeonStartLoc!!.blockY
+            val z = dungeonStartLoc!!.blockZ
+            it.setBlocks(CuboidRegion(BukkitWorld(DungeonTower.dungeonWorld),
+                BlockVector3.at(x,y,z),
+                BlockVector3.at(x+highX-lowX,y+highY-lowY,z+highZ-lowZ)), BlockTypes.AIR!!.defaultState
+            )
         }
     }
 
 
+    //ディープクローン
     public override fun clone(): FloorData {
         val clone = super.clone() as FloorData
         val cloneClearTask = clearTask.map { it.clone() }
@@ -230,7 +256,7 @@ class FloorData: Cloneable {
         fun loadFromYml(file: File): Pair<String,FloorData> {
             val yml = YamlConfiguration.loadConfiguration(file)
             val data = FloorData()
-            data.includeName = file.nameWithoutExtension
+            data.internalName = file.nameWithoutExtension
             val start = yml.getString("startLoc")!!.split(",").map { it.toInt().toDouble() }
             data.startLoc = Location(DungeonTower.dungeonWorld,start[0],start[1],start[2])
             val end = yml.getString("endLoc")!!.split(",").map { it.toInt().toDouble() }
@@ -243,9 +269,10 @@ class FloorData: Cloneable {
                 if (taskEnum == ClearTaskEnum.ENTER_COMMAND){
                     task.need = split[1].toInt()
                 }
+                task.scoreBoardName = split.last()
                 data.clearTask.add(task)
             }
-            return Pair(data.includeName,data)
+            return Pair(data.internalName,data)
         }
     }
 

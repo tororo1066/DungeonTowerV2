@@ -15,7 +15,7 @@ import tororo1066.tororopluginapi.sInventory.SInventoryItem
 import tororo1066.tororopluginapi.sItem.SItem
 import java.io.File
 
-class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory(SJavaPlugin.plugin, data.includeName){
+class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory(SJavaPlugin.plugin, data.internalName){
 
     override fun renderMenu(p: Player): Boolean {
         val items = arrayListOf(
@@ -49,8 +49,8 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
             })
             items.add(SInventoryItem(Material.BARRIER).setDisplayName("§cシフト右クリックで削除する").setClickEvent {
                 if (it.click != ClickType.SHIFT_RIGHT)return@setClickEvent
-                File(SJavaPlugin.plugin.dataFolder.path + "/spawners/${data.includeName}.yml").delete()
-                DungeonTower.spawnerData.remove(data.includeName)
+                File(SJavaPlugin.plugin.dataFolder.path + "/spawners/${data.internalName}.yml").delete()
+                DungeonTower.spawnerData.remove(data.internalName)
                 DungeonCommand()
                 p.sendPrefixMsg(SStr("&a削除しました"))
                 p.closeInventory()
@@ -67,7 +67,7 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
     }
 
     private fun save(p: Player){
-        val config = SJavaPlugin.sConfig.getConfig("spawners/${data.includeName}")?:YamlConfiguration()
+        val config = SJavaPlugin.sConfig.getConfig("spawners/${data.internalName}")?:YamlConfiguration()
         config.set("mob",data.mob?.internalName)
         config.set("cooltime",data.coolTime)
         config.set("max",data.max)
@@ -75,8 +75,8 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
         config.set("level",data.level)
         config.set("activateRange",data.activateRange)
         config.set("navigate",data.navigateKill)
-        if (SJavaPlugin.sConfig.saveConfig(config,"spawners/${data.includeName}")){
-            DungeonTower.spawnerData[data.includeName] = data
+        if (SJavaPlugin.sConfig.saveConfig(config,"spawners/${data.internalName}")){
+            DungeonTower.spawnerData[data.internalName] = data
             DungeonCommand()
             p.sendPrefixMsg(SStr("&a保存に成功しました"))
         } else {
