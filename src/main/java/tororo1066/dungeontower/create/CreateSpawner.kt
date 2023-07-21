@@ -31,6 +31,9 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
             createInputItem(SItem(Material.DIAMOND_BLOCK).setDisplayName("§a湧く半径を設定する").addLore("§d現在の値:§c${data.radius}"),Int::class.java){ int, _ ->
                 data.radius = int
             },
+            createInputItem(SItem(Material.SCAFFOLDING).setDisplayName("§a湧くときの高さのオフセットを設定する").addLore("§d現在の値:§c${data.yOffSet}"),Double::class.java){ double, _ ->
+                data.yOffSet = double
+            },
             createInputItem(SItem(Material.EXPERIENCE_BOTTLE).setDisplayName("§aMythicMobのlevelを設定する").addLore("§d現在の値:§c${data.level}"),Double::class.java){ double, _ ->
                 data.level = double
             },
@@ -72,6 +75,7 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
         config.set("cooltime",data.coolTime)
         config.set("max",data.max)
         config.set("radius",data.radius)
+        config.set("yOffSet",data.yOffSet)
         config.set("level",data.level)
         config.set("activateRange",data.activateRange)
         config.set("navigate",data.navigateKill)

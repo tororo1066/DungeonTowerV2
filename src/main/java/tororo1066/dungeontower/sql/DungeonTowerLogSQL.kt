@@ -10,7 +10,7 @@ class DungeonTowerLogSQL: USQLTable("dungeon_tower_log", SJavaPlugin.mysql) {
 
     companion object {
         val id = USQLVariable(USQLVariable.Int, autoIncrement = true)
-        val party_uuid = USQLVariable(USQLVariable.VarChar, length = 36,false,USQLVariable.Index.UNIQUE)
+        val party_uuid = USQLVariable(USQLVariable.VarChar, length = 36,false,USQLVariable.Index.KEY)
         val action = USQLVariable(USQLVariable.VarChar, length = 50)
         val value = USQLVariable(USQLVariable.Text)
         val date = USQLVariable(USQLVariable.DateTime)
@@ -27,6 +27,10 @@ class DungeonTowerLogSQL: USQLTable("dungeon_tower_log", SJavaPlugin.mysql) {
 
         fun annihilationDungeon(partyData: PartyData, towerName: String){
             sql.callBackInsert(partyData.partyUUID, "ANNIHILATION_DUNGEON", towerName, "now()")
+        }
+
+        fun timeOutDungeon(partyData: PartyData, towerName: String){
+            sql.callBackInsert(partyData.partyUUID, "TIMEOUT_DUNGEON", towerName, "now()")
         }
 
         fun quitDisbandDungeon(partyData: PartyData, towerName: String){

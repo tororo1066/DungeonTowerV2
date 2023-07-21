@@ -21,13 +21,13 @@ class LootData: LootTable, Cloneable {
     var rollAmount = 0
     var displayName = ""
 
-    override fun populateLoot(random: Random, context: LootContext): MutableCollection<ItemStack> {
+    override fun populateLoot(random: Random?, context: LootContext): MutableCollection<ItemStack> {
 
         val returnItems = ArrayList<ItemStack>()
 
         first@
         for (i in 0..rollAmount) {
-            val randomNum = random.nextInt(999999) + 1
+            val randomNum = (random?: Random()).nextInt(999999) + 1
             var preventRandom = 0
             for (item in items){
                 if (preventRandom < randomNum && item.first + preventRandom > randomNum){
@@ -49,12 +49,12 @@ class LootData: LootTable, Cloneable {
         return returnItems
     }
 
-    override fun fillInventory(inventory: Inventory, random: Random, context: LootContext) {
+    override fun fillInventory(inventory: Inventory, random: Random?, context: LootContext) {
         var items = populateLoot(random, context).toMutableList()
         for (i in items.size until inventory.size){
             items.add(SItem(Material.BARRIER).setCustomData(DungeonTower.plugin,"dloot", PersistentDataType.STRING,"space"))
         }
-        items = items.shuffled(random).toMutableList()
+        items = items.shuffled(random?:Random()).toMutableList()
         for (item in items.withIndex()){
             if (item.value.itemMeta.persistentDataContainer.has(NamespacedKey(DungeonTower.plugin,"dloot"),
                     PersistentDataType.STRING)) items[item.index] = ItemStack(Material.AIR)

@@ -13,7 +13,8 @@ class SpawnerData: Cloneable {
     var coolTime = 0
     var max = 0
     var radius = 0
-    var level = 0.0
+    var yOffSet = 0.0
+    var level = 1.0
     var activateRange = 0
 
     var kill = 0
@@ -31,8 +32,9 @@ class SpawnerData: Cloneable {
                 mob = DungeonTower.mythic.getMythicMob(yml.getString("mob"))?:null
                 coolTime = yml.getInt("cooltime")
                 max = yml.getInt("max")
+                yOffSet = yml.getDouble("yOffSet")
                 radius = yml.getInt("radius")
-                level = yml.getDouble("level")
+                level = yml.getDouble("level",1.0)
                 activateRange = yml.getInt("activateRange")
                 navigateKill = yml.getInt("navigate")
             }

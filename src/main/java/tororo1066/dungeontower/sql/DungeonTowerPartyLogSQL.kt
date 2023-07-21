@@ -9,8 +9,8 @@ import tororo1066.tororopluginapi.mysql.ultimate.USQLVariable
 class DungeonTowerPartyLogSQL: USQLTable("party_log",SJavaPlugin.mysql) {
 
     companion object {
-        val id = USQLVariable(USQLVariable.Int, nullable = false, index = USQLVariable.Index.PRIMARY)
-        val party_uuid = USQLVariable(USQLVariable.VarChar, length = 36, nullable = false, index = USQLVariable.Index.KEY)
+        val id = USQLVariable(USQLVariable.Int, autoIncrement = true)
+        val party_uuid = USQLVariable(USQLVariable.VarChar, length = 36, nullable = false, index = USQLVariable.Index.UNIQUE)
         val uuid = USQLVariable(USQLVariable.Text)
         val name = USQLVariable(USQLVariable.Text)
 
@@ -18,8 +18,8 @@ class DungeonTowerPartyLogSQL: USQLTable("party_log",SJavaPlugin.mysql) {
 
         fun insert(partyData: PartyData){
             sql.callBackInsert(partyData.partyUUID,
-                partyData.players.keys.joinToString(","),
-                partyData.players.map { it.value.mcid }.joinToString(","))
+                partyData.players.keys.joinToString("\r\n"),
+                partyData.players.map { it.value.mcid }.joinToString("\r\n"))
         }
     }
 

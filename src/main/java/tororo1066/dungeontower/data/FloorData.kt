@@ -11,12 +11,15 @@ import com.sk89q.worldedit.session.ClipboardHolder
 import com.sk89q.worldedit.world.block.BlockTypes
 import io.lumine.mythic.bukkit.BukkitAdapter
 import io.lumine.mythic.bukkit.events.MythicMobDeathEvent
+import net.kyori.adventure.text.Component
 import org.bukkit.*
 import org.bukkit.block.Chest
 import org.bukkit.block.Sign
 import org.bukkit.block.data.Directional
 import org.bukkit.block.data.type.EndPortalFrame
+import org.bukkit.block.data.type.Stairs
 import org.bukkit.configuration.file.YamlConfiguration
+import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.loot.LootContext
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitRunnable
@@ -25,6 +28,8 @@ import tororo1066.dungeontower.DungeonTower
 import tororo1066.tororopluginapi.sEvent.SEvent
 import java.io.File
 import java.util.*
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -35,9 +40,10 @@ class FloorData: Cloneable {
         ENTER_COMMAND
     }
 
-    class ClearTask(val type: ClearTaskEnum,var need: Int = 0,
+    class ClearTask(val type: ClearTaskEnum, var need: Int = 0,
                     var count: Int = 0, var clear: Boolean = false,
-                    var scoreBoardName: String = ""): Cloneable {
+                    var scoreboardName: String = "", var clearScoreboardName: String = ""): Cloneable {
+
         public override fun clone(): ClearTask {
             return super.clone() as ClearTask
         }
@@ -47,6 +53,9 @@ class FloorData: Cloneable {
 
     lateinit var startLoc: Location
     lateinit var endLoc: Location
+
+    var initialTime = 300
+    var time = 300
 
     var dungeonStartLoc: Location? = null
 
@@ -61,8 +70,15 @@ class FloorData: Cloneable {
     val clearTask = ArrayList<ClearTask>()
     val spawnerClearTasks = HashMap<UUID,Boolean>()
 
+    lateinit var yml: YamlConfiguration
+
     fun callFloor() {
         DungeonTower.createFloorNow = true
+        preventFloorStairs.clear()
+        nextFloorStairs.clear()
+        spawnerClearTasks.clear()
+        spawners.clear()
+        time = initialTime
         val lowX = min(startLoc.blockX, endLoc.blockX)
         val lowY = min(startLoc.blockY, endLoc.blockY)
         val lowZ = min(startLoc.blockZ, endLoc.blockZ)
@@ -89,7 +105,6 @@ class FloorData: Cloneable {
             Operations.complete(operation)
         }
 
-
         for ((indexX, x) in (lowX..highX).withIndex()){
             for ((indexY, y) in (lowY..highY).withIndex()){
                 for ((indexZ, z) in (lowZ..highZ).withIndex()){
@@ -105,7 +120,8 @@ class FloorData: Cloneable {
                                     val loot = (DungeonTower.lootData[data.getLine(1)]?:continue).clone()
                                     placeLoc.block.type = Material.CHEST
                                     val chest = placeLoc.block.state as Chest
-                                    chest.customName = loot.displayName
+                                    chest.customName(Component.text(loot.displayName))
+                                    chest.setLock("§c§l${Random().nextDouble(10000.0)}")
                                     chest.update()
                                     loot.fillInventory(chest.inventory, Random(),
                                         LootContext.Builder(chest.location).build())
@@ -123,13 +139,19 @@ class FloorData: Cloneable {
                                     locSave.block.blockData = portal
                                     val randUUID = UUID.randomUUID()
                                     spawnerClearTasks[randUUID] = spawner.navigateKill <= 0
+                                    val find = clearTask.find { it.type == ClearTaskEnum.KILL_SPAWNER_MOBS }
+                                    if (find != null) find.need += spawner.navigateKill
                                     spawners.add(
                                         object : BukkitRunnable() {
                                             val sEvent = SEvent(DungeonTower.plugin)
                                             init {
-                                                sEvent.register(MythicMobDeathEvent::class.java) { e ->
-                                                    if (e.mob.entity.dataContainer[NamespacedKey(DungeonTower.plugin,"dmob"), PersistentDataType.STRING] != randUUID.toString())return@register
+                                                sEvent.register(EntityDeathEvent::class.java) { e ->
+                                                    if (e.entity.persistentDataContainer[NamespacedKey(DungeonTower.plugin,"dmob"), PersistentDataType.STRING] != randUUID.toString())return@register
                                                     spawner.kill++
+                                                    if (spawner.kill <= spawner.navigateKill){
+                                                        val ksFind = clearTask.find { it.type == ClearTaskEnum.KILL_SPAWNER_MOBS }
+                                                        if (ksFind != null) ksFind.count += 1
+                                                    }
                                                     if (spawner.kill >= spawner.navigateKill){
                                                         spawnerClearTasks[randUUID] = true
                                                         if (spawnerClearTasks.values.none { !it }){
@@ -155,7 +177,11 @@ class FloorData: Cloneable {
                                             override fun run() {
                                                 if (spawner.count >= spawner.max)return
                                                 if (locSave.getNearbyPlayers(spawner.activateRange.toDouble()).isEmpty())return
-                                                val spawnLoc = locSave.clone().add((-spawner.radius..spawner.radius).random().toDouble(), 0.0,(-spawner.radius..spawner.radius).random().toDouble())
+                                                val spawnLoc = locSave.clone().add(
+                                                    (-spawner.radius..spawner.radius).random().toDouble(),
+                                                    spawner.yOffSet,
+                                                    (-spawner.radius..spawner.radius).random().toDouble()
+                                                )
                                                 val mob = spawner.mob?.spawn(BukkitAdapter.adapt(spawnLoc),spawner.level)
                                                 locSave.world.playSound(locSave, Sound.BLOCK_END_PORTAL_FRAME_FILL, 1f, 1f)
                                                 locSave.world.spawnParticle(Particle.FLAME, locSave, 15)
@@ -178,7 +204,7 @@ class FloorData: Cloneable {
 
                         }
                         Material.WARPED_STAIRS->{
-                            nextFloorStairs.add(placeLoc.clone().add(0.0,1.0,0.0))
+                            nextFloorStairs.add(placeLoc.clone().add(0.0,1.0,0.0).setDirection((block.blockData as Stairs).facing.direction))
                             lastFloor = false
                         }
                         Material.CRIMSON_STAIRS->{
@@ -197,6 +223,27 @@ class FloorData: Cloneable {
         }
         DungeonTower.createFloorNow = false
         return
+    }
+
+    fun unlockChest(){
+        val lowX = min(startLoc.blockX, endLoc.blockX)
+        val lowY = min(startLoc.blockY, endLoc.blockY)
+        val lowZ = min(startLoc.blockZ, endLoc.blockZ)
+        val highX = if (lowX == startLoc.blockX) endLoc.blockX else startLoc.blockX
+        val highY = if (lowY == startLoc.blockY) endLoc.blockY else startLoc.blockY
+        val highZ = if (lowZ == startLoc.blockZ) endLoc.blockZ else startLoc.blockZ
+
+        for ((indexX, _) in (lowX..highX).withIndex()){
+            for ((indexY, _) in (lowY..highY).withIndex()){
+                for ((indexZ, _) in (lowZ..highZ).withIndex()){
+                    val placeLoc = dungeonStartLoc!!.clone().add(indexX.toDouble(),indexY.toDouble(),indexZ.toDouble())
+
+                    val chest = placeLoc.block.state as? Chest?:continue
+                    chest.setLock(null)
+                    chest.update()
+                }
+            }
+        }
     }
 
     fun removeFloor(){
@@ -224,44 +271,17 @@ class FloorData: Cloneable {
     }
 
 
-    //ディープクローン
-    public override fun clone(): FloorData {
-        val clone = super.clone() as FloorData
-        val cloneClearTask = clearTask.map { it.clone() }
-        clone.clearTask.clear()
-        clone.clearTask.addAll(cloneClearTask)
-
-        val cloneNextFloorStairs = nextFloorStairs.map { it.clone() }
-        clone.nextFloorStairs.clear()
-        clone.nextFloorStairs.addAll(cloneNextFloorStairs)
-        val preventFloorStairs = preventFloorStairs.map { it.clone() }
-        clone.preventFloorStairs.clear()
-        clone.preventFloorStairs.addAll(preventFloorStairs)
-        val cloneJoinCommands = ArrayList(joinCommands)
-        clone.joinCommands.clear()
-        clone.joinCommands.addAll(cloneJoinCommands)
-        clone.spawners.clear()
-        val spawnersClearTasks = spawnerClearTasks.toMap()
-        clone.spawnerClearTasks.clear()
-        clone.spawnerClearTasks.putAll(spawnersClearTasks)
-
-        clone.startLoc = startLoc.clone()
-        clone.endLoc = endLoc.clone()
-        clone.dungeonStartLoc = dungeonStartLoc?.clone()
-
-        return clone
-    }
-
-    companion object{
-        fun loadFromYml(file: File): Pair<String,FloorData> {
-            val yml = YamlConfiguration.loadConfiguration(file)
-            val data = FloorData()
-            data.internalName = file.nameWithoutExtension
+    fun newInstance(): FloorData {
+        val data = FloorData().apply {
+            internalName = this@FloorData.internalName
+            yml = this@FloorData.yml
             val start = yml.getString("startLoc")!!.split(",").map { it.toInt().toDouble() }
-            data.startLoc = Location(DungeonTower.dungeonWorld,start[0],start[1],start[2])
+            startLoc = Location(DungeonTower.dungeonWorld,start[0],start[1],start[2])
             val end = yml.getString("endLoc")!!.split(",").map { it.toInt().toDouble() }
-            data.endLoc = Location(DungeonTower.dungeonWorld,end[0],end[1],end[2])
-            data.joinCommands.addAll(yml.getStringList("joinCommands"))
+            endLoc = Location(DungeonTower.dungeonWorld,end[0],end[1],end[2])
+            initialTime = yml.getInt("time",300)
+            time = initialTime
+            joinCommands.addAll(yml.getStringList("joinCommands"))
             yml.getStringList("clearTasks").forEach {
                 val split = it.split(",")
                 val taskEnum = ClearTaskEnum.valueOf(split[0].uppercase())
@@ -269,9 +289,41 @@ class FloorData: Cloneable {
                 if (taskEnum == ClearTaskEnum.ENTER_COMMAND){
                     task.need = split[1].toInt()
                 }
-                task.scoreBoardName = split.last()
-                data.clearTask.add(task)
+                task.scoreboardName = split.reversed()[1]
+                task.clearScoreboardName = split.last()
+                clearTask.add(task)
             }
+        }
+
+        return data
+    }
+
+    companion object {
+        fun loadFromYml(file: File): Pair<String,FloorData> {
+            val yml = YamlConfiguration.loadConfiguration(file)
+            val data = FloorData().apply {
+                internalName = file.nameWithoutExtension
+                this.yml = yml
+                val start = yml.getString("startLoc")!!.split(",").map { it.toInt().toDouble() }
+                startLoc = Location(DungeonTower.dungeonWorld,start[0],start[1],start[2])
+                val end = yml.getString("endLoc")!!.split(",").map { it.toInt().toDouble() }
+                endLoc = Location(DungeonTower.dungeonWorld,end[0],end[1],end[2])
+                initialTime = yml.getInt("time",300)
+                time = initialTime
+                joinCommands.addAll(yml.getStringList("joinCommands"))
+                yml.getStringList("clearTasks").forEach {
+                    val split = it.split(",")
+                    val taskEnum = ClearTaskEnum.valueOf(split[0].uppercase())
+                    val task = ClearTask(taskEnum)
+                    if (taskEnum == ClearTaskEnum.ENTER_COMMAND){
+                        task.need = split[1].toInt()
+                    }
+                    task.scoreboardName = split.reversed()[1]
+                    task.clearScoreboardName = split.last()
+                    clearTask.add(task)
+                }
+            }
+
             return Pair(data.internalName,data)
         }
     }

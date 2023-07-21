@@ -15,13 +15,20 @@ class DungeonTaskCommand: CommandExecutor, TabExecutor {
             if (sender !is BlockCommandSender)return true
             val radius = args[0].split("{")[1].split("}")[0].toInt()
             sender.block.location.getNearbyPlayers(radius.toDouble()).forEach {
-                Bukkit.dispatchCommand(sender, "dungeontask ${it.name}")
+                Bukkit.dispatchCommand(sender, "dungeontask ${it.name} true")
             }
             return true
         }
 
         val p = args[0].toPlayer()!!
-        val data = DungeonTower.partiesData[p.uniqueId]?:return true
+        val pirCase = args.getOrNull(1)?.toBoolean()?:false
+        val data = if (pirCase){
+            DungeonTower.partiesData[p.uniqueId]?:return true
+        } else {
+            DungeonTower.partiesData.entries
+                .find { it.value?.players?.containsKey(p.uniqueId) == false }
+                ?.value?:return true
+        }
         val nowTask = data.nowTask?:return true
         val find = nowTask.nowFloor.clearTask.find { it.type == FloorData.ClearTaskEnum.ENTER_COMMAND }?:return true
         if (find.clear)return true

@@ -3,9 +3,10 @@ package tororo1066.dungeontower.command
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
+import org.bukkit.block.Sign
 import org.bukkit.command.CommandSender
 import org.bukkit.persistence.PersistentDataType
-import tororo1066.dungeondata.create.CreateTower
+import tororo1066.dungeontower.create.CreateTower
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.DungeonTower.Companion.sendPrefixMsg
 import tororo1066.dungeontower.DungeonTowerTask
@@ -13,6 +14,7 @@ import tororo1066.dungeontower.create.CreateFloor
 import tororo1066.dungeontower.create.CreateLoot
 import tororo1066.dungeontower.create.CreateSpawner
 import tororo1066.dungeontower.data.*
+import tororo1066.dungeontower.inventory.RuleInventory
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.annotation.SCommandBody
 import tororo1066.tororopluginapi.otherClass.StrExcludeFileIllegalCharacter
@@ -63,6 +65,12 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
     }
 
     @SCommandBody
+    val rule = command().addArg(SCommandArg("rule"))
+        .setPlayerExecutor {
+            RuleInventory().open(it.sender)
+        }
+
+    @SCommandBody
     val entryTower = command().addArg(SCommandArg("entry")).addArg(SCommandArg(DungeonTower.towerData.keys)).setPlayerExecutor {
         if (DungeonTower.playNow.contains(it.sender.uniqueId)){
             it.sender.sendPrefixMsg(SStr("&cダンジョンに参加しています"))
@@ -79,10 +87,8 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
 
         val tower = DungeonTower.towerData[it.args[1]]!!
         val partyData = DungeonTower.partiesData[it.sender.uniqueId]!!
-        if (partyData.players.size > tower.partyLimit){
-            it.sender.sendPrefixMsg(SStr("&4${tower.partyLimit}人以下でしか入れません (現在:${partyData.players.size}人)"))
-            return@setPlayerExecutor
-        }
+
+        if (!tower.canChallenge(it.sender,partyData))return@setPlayerExecutor
 
         val task = DungeonTowerTask(partyData, tower)
         partyData.players.keys.forEach { uuid ->
@@ -147,7 +153,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
         }
 
     @SCommandBody
-    val acceptParty = command().addArg(SCommandArg("party")).addArg(SCommandArg("accpet"))
+    val acceptParty = command().addArg(SCommandArg("party")).addArg(SCommandArg("accept"))
         .addArg(SCommandArg(SCommandArgType.ONLINE_PLAYER).addAlias("プレイヤー名")).setPlayerExecutor {
             if (DungeonTower.playNow.contains(it.sender.uniqueId)){
                 it.sender.sendPrefixMsg(SStr("&cダンジョンに参加しています"))
@@ -175,7 +181,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
             val party = DungeonTower.partiesData[it.sender.uniqueId]!!
             party.players[p.uniqueId] = UserData(p.uniqueId,p.name)
             it.sender.sendPrefixMsg(SStr("&a${p.name}をパーティーに追加しました"))
-            party.broadCast(SStr("&a${it.sender.name}がパーティーに参加しました"))
+            party.broadCast(SStr("&a${p.name}がパーティーに参加しました"))
         }
 
     @SCommandBody
@@ -292,14 +298,14 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
                 meta?.persistentDataContainer?.get(NamespacedKey(DungeonTower.plugin,"secondloc"), PersistentDataType.STRING)
 
             if (firstLoc == null || secondLoc == null){
-                CreateFloor(DungeonTower.floorData[it.args[2]]!!.clone(),true).open(it.sender)
+                CreateFloor(DungeonTower.floorData[it.args[2]]!!.newInstance(),true).open(it.sender)
                 return@setPlayerExecutor
             }
             val startLoc = firstLoc.split(",").map { map -> map.toDouble() }
             val endLoc = secondLoc.split(",").map { map -> map.toDouble() }
 
             if (DungeonTower.floorData.containsKey(it.args[2])){
-                val data = DungeonTower.floorData[it.args[2]]!!.clone()
+                val data = DungeonTower.floorData[it.args[2]]!!.newInstance()
                 data.startLoc = Location(DungeonTower.floorWorld,startLoc[0],startLoc[1],startLoc[2])
                 data.endLoc = Location(DungeonTower.floorWorld,endLoc[0],endLoc[1],endLoc[2])
                 CreateFloor(data,true).open(it.sender)
@@ -386,6 +392,18 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
                 return@setPlayerExecutor
             }
             CreateTower(DungeonTower.towerData[it.args[2]]!!.clone(),true).open(it.sender)
+        }
+
+    @SCommandBody("dungeon.op")
+    val modifySpawnerSign = command().addArg(SCommandArg("sign"))
+        .addArg(SCommandArg("spawner"))
+        .addArg(SCommandArg(DungeonTower.spawnerData.keys))
+        .setPlayerExecutor {
+            val hit = it.sender.rayTraceBlocks(4.0)?.hitBlock?:return@setPlayerExecutor
+            val state = hit.state as? Sign?:return@setPlayerExecutor
+            state.setLine(0,"spawner")
+            state.setLine(1,it.args[2])
+            state.update(true)
         }
 
 }

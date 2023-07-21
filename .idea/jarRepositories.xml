@@ -66,5 +66,10 @@
       <option name="name" value="sk89q-repo" />
       <option name="url" value="https://maven.enginehub.org/repo/" />
     </remote-repository>
+    <remote-repository>
+      <option name="id" value="maven3" />
+      <option name="name" value="maven3" />
+      <option name="url" value="https://repo.onarandombox.com/content/groups/public/" />
+    </remote-repository>
   </component>
 </project>

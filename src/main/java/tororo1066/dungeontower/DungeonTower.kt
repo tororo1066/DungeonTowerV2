@@ -16,6 +16,7 @@ import tororo1066.tororopluginapi.SInput
 import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.mysql.SMySQL
+import tororo1066.tororopluginapi.otherUtils.UsefulUtility
 import tororo1066.tororopluginapi.sEvent.SEvent
 import tororo1066.tororopluginapi.utils.sendMessage
 import java.util.UUID
@@ -38,6 +39,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
         val prefix = SStr("&b[&4Dungeon&cTower&b]&r")
         lateinit var mythic: BukkitAPIHelper //スポナーでmmのmobを湧かすために使用
         lateinit var sInput: SInput //入力マネージャー
+        lateinit var util: UsefulUtility
 
         val lootData = HashMap<String,LootData>() //宝箱のデータ
         val spawnerData = HashMap<String,SpawnerData>() //スポナーのデータ
@@ -53,11 +55,11 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
         fun reloadDungeonConfig(){
             plugin.reloadConfig()
             xLimit = plugin.config.getInt("xLimit",10000)
-            y = plugin.config.getInt("y",5)
+            y = plugin.config.getInt("y",1)
             Bukkit.getWorld(plugin.config.getString("dungeonWorld","dungeon")!!)?.let { dungeonWorld = it }
             Bukkit.getWorld(plugin.config.getString("floorWorld","world")!!)?.let { floorWorld = it }
             lobbyLocation = plugin.config.getLocation("lobbyLocation", Location(null,0.0,0.0,0.0))!!
-            dungeonXSpace = plugin.config.getInt("dungeonXSpace",1)
+            dungeonXSpace = plugin.config.getInt("dungeonXSpace",5)
 
             mysql = SMySQL(plugin)
             DungeonTowerLogSQL()
@@ -69,6 +71,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
         plugin = this
         mythic = BukkitAPIHelper()
         sInput = SInput(this)
+        util = UsefulUtility(this)
         reloadDungeonConfig()
 
         sConfig.mkdirs("floors")
@@ -108,5 +111,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
             }
             partiesData.remove(e.player.uniqueId)
         }
+
+        server.messenger.registerOutgoingPluginChannel(this,"tororo:dungeontower")
     }
 }

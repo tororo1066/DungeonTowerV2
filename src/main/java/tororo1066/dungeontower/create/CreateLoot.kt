@@ -5,6 +5,7 @@ import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.event.inventory.ClickType
 import org.bukkit.inventory.ItemStack
+import org.bukkit.persistence.PersistentDataType
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.DungeonTower.Companion.sendPrefixMsg
 import tororo1066.dungeontower.command.DungeonCommand
@@ -20,6 +21,10 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJava
 
     override fun renderMenu(p: Player): Boolean {
         val items = arrayListOf(
+            createInputItem(SItem(Material.GRASS_BLOCK).setDisplayName("§a表示名を設定する")
+                .addLore("§d現在の値:§c${data.displayName}"),String::class.java) { str, _ ->
+                data.displayName = str
+            },
             createInputItem(SItem(Material.CLOCK).setDisplayName("§a抽選回数を設定する").addLore("§d現在の値:§c${data.rollAmount}"),Int::class.java){ int, _ ->
                 data.rollAmount = int
             },
@@ -28,13 +33,19 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJava
                     override fun renderMenu(p: Player): Boolean {
                         val items = arrayListOf<SInventoryItem>()
                         data.items.forEach {
-                            items.add(SInventoryItem(it.third).addLore("§a確率:${it.first}/1000000,§a個数:${it.second}","§cシフト左クリックで削除").setCanClick(false).setClickEvent second@ { e ->
+                            items.add(SInventoryItem(it.third)
+                                .addLore("§a確率:${it.first}/1000000,§b個数:${it.second}",
+                                    "§6持ち帰れたときのアナウンス:${it.third.getCustomData(DungeonTower.plugin,"dannouncementitem",
+                                        PersistentDataType.INTEGER) != null}",
+                                    "§cシフト左クリックで削除").setCanClick(false).setClickEvent second@ { e ->
                                 if (e.click != ClickType.SHIFT_LEFT)return@second
                                 data.items.remove(it)
                                 allRenderMenu(p)
                             })
                         }
-                        items.add(createInputItem(SItem(Material.EMERALD_BLOCK).setDisplayName("§a追加").addLore("§a合計の確率:${data.items.sumOf { it.first }}/1000000"),Int::class.java,"§d確率を設定してください(手に登録するアイテムを持ってください)",true) { int, _ ->
+                        items.add(createInputItem(SItem(Material.EMERALD_BLOCK).setDisplayName("§a追加")
+                            .addLore("§a合計の確率:${data.items.sumOf { it.first }}/1000000"),
+                            Int::class.java,"§d確率を設定してください(手に登録するアイテムを持ってください)",true) { int, _ ->
                             val item = p.inventory.itemInMainHand
                             if (item.type.isAir){
                                 p.sendPrefixMsg(SStr("§c手にアイテムを持ってください！"))
@@ -42,8 +53,17 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJava
                             }
 
                             DungeonTower.sInput.sendInputCUI(p,IntRange::class.java,"§d個数を入力してください(<最低>..<最高>)") { intRange ->
-                                data.items.add(Triple(int,intRange, SItem(item)))
-                                open(p)
+                                DungeonTower.sInput.sendInputCUI(p,Boolean::class.java,
+                                    "§d持ち帰れたときにアナウンスするか決めてください(true/false)") { bool ->
+                                    val sItem = SItem(item).apply {
+                                        if (bool){
+                                            setCustomData(DungeonTower.plugin,"dannouncementitem",
+                                                PersistentDataType.INTEGER,1)
+                                        }
+                                    }
+                                    data.items.add(Triple(int,intRange, sItem))
+                                    open(p)
+                                }
                             }
                         })
                         setResourceItems(items)

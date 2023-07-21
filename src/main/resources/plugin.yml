@@ -1,5 +1,5 @@
 name: DungeonTowerReMake
-version: '${version}'
+version: 1.0
 main: tororo1066.dungeontower.DungeonTower
 api-version: 1.17
 
@@ -10,11 +10,14 @@ softdepend:
   - Multiverse-Core
   - Multiverse-Portals
   - MultiWorld
+load: POSTWORLD
 commands:
   dungeon:
+    permission: dungeontower.user
     aliases:
       - tower
       - dt
   dungeontask:
+    permission: dungeontower.task
     aliases:
       - dtask
