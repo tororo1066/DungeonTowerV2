@@ -196,8 +196,8 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
         }
         val data = DungeonTower.partiesData[it.sender.uniqueId]
         if (data == null){
-            DungeonTower.partiesData.values.filterNotNull().forEach { party ->
-                if (!party.players.containsKey(it.sender.uniqueId))return@forEach
+            DungeonTower.partiesData.values.filterNotNull()
+                .filter { filter -> filter.players.containsKey(it.sender.uniqueId) }.forEach { party ->
                 party.broadCast(SStr("&a${it.sender.name}がパーティーから抜けました"))
                 party.players.remove(it.sender.uniqueId)
                 DungeonTower.partiesData.remove(it.sender.uniqueId)
@@ -206,6 +206,28 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
             data.broadCast(SStr("&a${it.sender.name}がパーティーを解散しました"))
             data.players.keys.forEach { uuid ->
                 DungeonTower.partiesData.remove(uuid)
+            }
+        }
+    }
+
+    @SCommandBody
+    val listParty = command().addArg(SCommandArg("party")).addArg(SCommandArg("list")).setPlayerExecutor {
+        if (!DungeonTower.partiesData.containsKey(it.sender.uniqueId)){
+            it.sender.sendPrefixMsg(SStr("&cパーティーに参加していません"))
+            return@setPlayerExecutor
+        }
+
+        val data = DungeonTower.partiesData[it.sender.uniqueId]
+        if (data == null){
+            DungeonTower.partiesData.values.filterNotNull()
+                .filter { filter -> filter.players.containsKey(it.sender.uniqueId) }.forEach { party ->
+                    party.players.values.forEach { userData ->
+                        it.sender.sendMessage("§d${if (party.parent == userData.uuid) "パーティリーダー " else ""}§a${userData.mcid}")
+                    }
+                }
+        } else {
+            data.players.values.forEach { userData ->
+                it.sender.sendMessage("§d${if (data.parent == userData.uuid) "パーティリーダー " else ""}§a${userData.mcid}")
             }
         }
     }

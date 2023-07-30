@@ -62,6 +62,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
             dungeonXSpace = plugin.config.getInt("dungeonXSpace",5)
 
             mysql = SMySQL(plugin)
+            DungeonCommand()
             DungeonTowerLogSQL()
             DungeonTowerPartyLogSQL()
         }

@@ -204,11 +204,11 @@ class FloorData: Cloneable {
 
                         }
                         Material.WARPED_STAIRS->{
-                            nextFloorStairs.add(placeLoc.clone().add(0.0,1.0,0.0).setDirection((block.blockData as Stairs).facing.direction))
+                            nextFloorStairs.add(placeLoc.clone().add(0.0,1.0,0.0))
                             lastFloor = false
                         }
                         Material.CRIMSON_STAIRS->{
-                            preventFloorStairs.add(placeLoc.clone().add(0.0,1.0,0.0))
+                            preventFloorStairs.add(placeLoc.clone().add(0.0,1.0,0.0).setDirection((block.blockData as Stairs).facing.direction))
                         }
 
                         else->{}

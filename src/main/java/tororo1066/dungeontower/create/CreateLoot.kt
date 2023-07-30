@@ -50,12 +50,13 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJava
                             if (item.type.isAir){
                                 p.sendPrefixMsg(SStr("§c手にアイテムを持ってください！"))
                                 open(p)
+                                return@createInputItem
                             }
 
                             DungeonTower.sInput.sendInputCUI(p,IntRange::class.java,"§d個数を入力してください(<最低>..<最高>)") { intRange ->
                                 DungeonTower.sInput.sendInputCUI(p,Boolean::class.java,
                                     "§d持ち帰れたときにアナウンスするか決めてください(true/false)") { bool ->
-                                    val sItem = SItem(item).apply {
+                                    val sItem = SItem(item.clone()).apply {
                                         if (bool){
                                             setCustomData(DungeonTower.plugin,"dannouncementitem",
                                                 PersistentDataType.INTEGER,1)
@@ -109,6 +110,7 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJava
             chances.add(triple.first)
             amounts.add("${triple.second.first}to${triple.second.last}")
         }
+        config.set("displayName",data.displayName)
         config.set("items",itemStacks)
         config.set("chances",chances)
         config.set("amounts",amounts)

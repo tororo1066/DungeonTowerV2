@@ -13,11 +13,11 @@ softdepend:
 load: POSTWORLD
 commands:
   dungeon:
-    permission: dungeontower.user
+    permission: dungeon.user
     aliases:
       - tower
       - dt
   dungeontask:
-    permission: dungeontower.task
+    permission: dungeon.task
     aliases:
       - dtask

@@ -1,11 +1,13 @@
 package tororo1066.dungeontower
 
 import com.destroystokyo.paper.event.player.PlayerStopSpectatingEntityEvent
+import com.elmakers.mine.bukkit.api.event.PreCastEvent
 import com.google.common.io.ByteStreams
 import net.kyori.adventure.text.Component
 import org.bukkit.*
 import org.bukkit.entity.Player
 import org.bukkit.event.entity.EntityResurrectEvent
+import org.bukkit.event.entity.EntityToggleGlideEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.player.PlayerItemConsumeEvent
 import org.bukkit.event.player.PlayerMoveEvent
@@ -81,8 +83,14 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
         lock.lock()
     }
 
-    private fun clearDungeonItems(inv: Inventory){
-        inv.contents?.forEach {
+    private fun clearDungeonItems(p: Player){
+        val cursorItem = p.itemOnCursor
+        if (!cursorItem.type.isAir && cursorItem.itemMeta.persistentDataContainer.has(
+            NamespacedKey(DungeonTower.plugin,"dlootitem")
+        )){
+            cursorItem.amount = 0
+        }
+        p.inventory.contents?.forEach {
             if (it != null && it.itemMeta?.persistentDataContainer?.has(
                 NamespacedKey(DungeonTower.plugin,"dlootitem"),
                 PersistentDataType.STRING) == true){
@@ -165,7 +173,7 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
             val data = party.players[e.player.uniqueId]!!
             if (!data.isAlive)return@register
             nextFloorPlayers.remove(e.player.uniqueId)
-            clearDungeonItems(e.player.inventory)
+            clearDungeonItems(e.player)
             data.isAlive = false
             party.broadCast(SStr("&c&l${e.player.name}が死亡した..."))
             e.player.spigot().respawn()
@@ -213,7 +221,7 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
         sEvent.register(PlayerQuitEvent::class.java){ e ->
             if (!party.players.containsKey(e.player.uniqueId))return@register
             nextFloorPlayers.remove(e.player.uniqueId)
-            clearDungeonItems(e.player.inventory)
+            clearDungeonItems(e.player)
             if (party.parent == e.player.uniqueId){
                 val randomParent = party.players.entries.filter { it.key != e.player.uniqueId }.randomOrNull()?.key
                 if (randomParent != null){
@@ -231,6 +239,16 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
             e.player.teleport(DungeonTower.lobbyLocation)
 
             if (party.alivePlayers.isEmpty()){
+                party.broadCast(SStr("&c生きているプレイヤーが退出したため負けになりました"))
+                party.teleport(DungeonTower.lobbyLocation)
+                party.players.keys.forEach { uuid ->
+                    if (uuid.toPlayer()?.gameMode == GameMode.SPECTATOR){
+                        uuid.toPlayer()?.spectatorTarget = null
+                        uuid.toPlayer()?.gameMode = GameMode.SURVIVAL
+                    }
+                    DungeonTower.partiesData.remove(uuid)
+                    DungeonTower.playNow.remove(uuid)
+                }
                 DungeonTowerLogSQL.quitDisbandDungeon(party, tower.internalName)
                 end()
                 return@register
@@ -300,6 +318,22 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
             if (!party.players.containsKey(e.entity.uniqueId))return@register
             if (e.hand == null || e.isCancelled)return@register
             e.isCancelled = true
+        }
+
+        sEvent.register(PreCastEvent::class.java) { e ->
+            if (!party.players.containsKey(e.mage.entity.uniqueId))return@register
+            if (e.spell.category.name == "wing"){
+                e.mage.sendMessage("§cwingは使えません")
+                e.isCancelled = true
+            }
+        }
+
+        sEvent.register(EntityToggleGlideEvent::class.java) { e ->
+            if (!party.players.containsKey(e.entity.uniqueId))return@register
+            if (e.isGliding && !e.isCancelled){
+                e.entity.sendMessage("§cエリトラは使えません")
+                e.isCancelled = true
+            }
         }
 
 
@@ -405,6 +439,5 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
         }
 
     }
-
 
 }
