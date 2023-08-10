@@ -1,156 +1,54 @@
-package tororo1066.dungeontower
+package tororo1066.dungeontower.task
 
 import com.destroystokyo.paper.event.player.PlayerStopSpectatingEntityEvent
 import com.elmakers.mine.bukkit.api.event.PreCastEvent
-import com.google.common.io.ByteStreams
 import net.kyori.adventure.text.Component
-import org.bukkit.*
-import org.bukkit.entity.Player
+import org.bukkit.Bukkit
+import org.bukkit.GameMode
+import org.bukkit.Material
 import org.bukkit.event.entity.EntityResurrectEvent
 import org.bukkit.event.entity.EntityToggleGlideEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.player.PlayerItemConsumeEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
-import org.bukkit.inventory.Inventory
-import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scoreboard.Criteria
 import org.bukkit.scoreboard.DisplaySlot
+import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.data.FloorData
 import tororo1066.dungeontower.data.PartyData
 import tororo1066.dungeontower.data.TowerData
-import tororo1066.dungeontower.sql.DungeonTowerLogSQL
-import tororo1066.dungeontower.sql.DungeonTowerPartyLogSQL
+import tororo1066.dungeontower.sql.TowerLogDB
 import tororo1066.tororopluginapi.SStr
-import tororo1066.tororopluginapi.sEvent.SEvent
 import tororo1066.tororopluginapi.utils.DateType
 import tororo1066.tororopluginapi.utils.toJPNDateStr
 import tororo1066.tororopluginapi.utils.toPlayer
 import java.util.*
-import java.util.function.Consumer
-import kotlin.collections.ArrayList
 
-class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
-
-    class Lock {
-
-        @Volatile
-        private var isLock = false
-        @Volatile
-        private var hadLocked = false
-
-        fun lock(){
-            synchronized(this){
-                if (hadLocked){
-                    return
-                }
-                isLock = true
-            }
-            try {
-                while (isLock){ sleep(1) }
-            } catch (_: InterruptedException) {
-
-            }
-        }
-
-        fun unlock(){
-            synchronized(this){
-                hadLocked = true
-                isLock = false
-            }
-        }
-    }
+class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(party, tower) {
 
     private var nowFloorNum = 1
     lateinit var nowFloor: FloorData
-    private val sEvent = SEvent(DungeonTower.plugin)
     private val nextFloorPlayers = ArrayList<UUID>()
     private val moveLockPlayers = ArrayList<UUID>()
-    private lateinit var nowThread: Thread
     private var scoreboard = Bukkit.getScoreboardManager().newScoreboard
 
     private var end = false
     private var unlockedChest = false
 
-    private fun runTask(unit: ()->Unit){
-        val lock = Lock()
-
-        Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
-            unit.invoke()
-            lock.unlock()
-        })
-
-        lock.lock()
-    }
-
-    private fun clearDungeonItems(p: Player){
-        val cursorItem = p.itemOnCursor
-        if (!cursorItem.type.isAir && cursorItem.itemMeta.persistentDataContainer.has(
-            NamespacedKey(DungeonTower.plugin,"dlootitem")
-        )){
-            cursorItem.amount = 0
-        }
-        p.inventory.contents?.forEach {
-            if (it != null && it.itemMeta?.persistentDataContainer?.has(
-                NamespacedKey(DungeonTower.plugin,"dlootitem"),
-                PersistentDataType.STRING) == true){
-                it.amount = 0
-            }
-        }
-    }
-
-    private fun dungeonItemToItem(p: Player){
-        val inv = p.inventory
-        inv.contents?.forEach {
-            if (it != null && it.itemMeta?.persistentDataContainer?.has(
-                    NamespacedKey(DungeonTower.plugin, "dlootitem"),
-                    PersistentDataType.STRING) == true){
-                it.editMeta { meta -> meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin,"dlootitem")) }
-                if (it.itemMeta.persistentDataContainer.has(
-                    NamespacedKey(DungeonTower.plugin, "dannouncementitem"),
-                    PersistentDataType.INTEGER
-                )){
-                    it.editMeta { meta -> meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin, "dannouncementitem")) }
-                    if (DungeonTower.plugin.server.messenger.isReservedChannel("tororo:dungeontower")){
-                        val out = ByteStreams.newDataOutput()
-                        out.writeUTF("message")
-                        out.writeUTF("${DungeonTower.prefix}§e§l${p.name}§dが§r${it.itemMeta.displayName}§dを手に入れた！")
-                        DungeonTower.plugin.server.sendPluginMessage(DungeonTower.plugin, "tororo:dungeontower", out.toByteArray())
-                    } else {
-                        SStr("${DungeonTower.prefix}§e§l${p.name}§dが§r${it.itemMeta.displayName}§dを手に入れた！").broadcast()
-                    }
-                }
-            }
-        }
-    }
-
-    private fun callCommand(floor: FloorData){
-        Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
-            party.players.keys.forEach {
-                val p = Bukkit.getPlayer(it)?:return@forEach
-                floor.joinCommands.forEach { cmd ->
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(),
-                        cmd.replace("<name>",p.name)
-                            .replace("<uuid>",p.uniqueId.toString()))
-                }
-            }
-        })
-    }
-
-    private fun end(){
+    override fun end(){
         nowFloor.removeFloor()
         end = true
         sEvent.unregisterAll()
         scoreboard.getObjective("DungeonTower")?.displaySlot = null
         scoreboard.getObjective("DungeonTower")?.unregister()
-        nowThread.interrupt()
+        interrupt()
     }
 
     override fun run() {
         if (party.players.size == 0)return
-        DungeonTowerPartyLogSQL.insert(party)
-        DungeonTowerLogSQL.enterDungeon(party, tower.internalName)
-        nowThread = this
+        TowerLogDB.insertPartyData(party)
+        TowerLogDB.enterDungeon(party, tower.internalName)
         party.nowTask = this
         party.broadCast(SStr("&c${tower.name}&aにテレポート中..."))
         nowFloor = tower.randomFloor(nowFloorNum)
@@ -160,7 +58,7 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
         }
         runTask { nowFloor.callFloor() }
         runTask { party.smokeStan(60) }
-        runTask { party.teleport(nowFloor.preventFloorStairs.first().add(0.0,1.0,0.0)) }
+        runTask { party.teleport(nowFloor.preventFloorStairs.random().add(0.0,1.0,0.0)) }
         callCommand(nowFloor)
         //eventでthreadをlockするの使わないで
         sEvent.register(PlayerDeathEvent::class.java){ e ->
@@ -199,7 +97,7 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
                 party.players.keys.forEach { uuid ->
                     moveLockPlayers.add(uuid)
                 }
-                DungeonTowerLogSQL.annihilationDungeon(party, tower.internalName)
+                TowerLogDB.annihilationDungeon(party, tower.internalName)
                 Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
                     party.teleport(DungeonTower.lobbyLocation)
                     party.players.keys.forEach { uuid ->
@@ -249,7 +147,7 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
                     DungeonTower.partiesData.remove(uuid)
                     DungeonTower.playNow.remove(uuid)
                 }
-                DungeonTowerLogSQL.quitDisbandDungeon(party, tower.internalName)
+                TowerLogDB.quitDisbandDungeon(party, tower.internalName)
                 end()
                 return@register
             }
@@ -273,22 +171,26 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
                         while (DungeonTower.createFloorNow){
                             sleep(1)
                         }
-                        party.smokeStan(60)
                         nowFloor.callFloor()
+                        party.smokeStan(60)
                         unlockedChest = false
-                        party.teleport(nowFloor.preventFloorStairs.first().add(0.0,1.0,0.0))
+                        party.teleport(nowFloor.preventFloorStairs.random().add(0.0,1.1,0.0))
                         callCommand(nowFloor)
                         preventFloor.removeFloor()
                     }
                 }
                 Material.DIAMOND_BLOCK->{
                     if (nowFloor.clearTask.any { !it.clear })return@register
-                    if (!nowFloor.lastFloor)return@register//どこでもクリアできるっていうのも面白いかもしれない
+//                    if (!nowFloor.lastFloor)return@register//どこでもクリアできるっていうのも面白いかもしれない
                     nextFloorPlayers.add(e.player.uniqueId)
                     if (party.alivePlayers.size / 2 < nextFloorPlayers.size){
-                        DungeonTowerLogSQL.clearDungeon(party, tower.internalName)
+                        TowerLogDB.clearDungeon(party, tower.internalName)
                         party.broadCast(SStr("&a&lクリア！"))
-                        party.alivePlayers.keys.forEach {
+                        party.players.keys.forEach {
+                            if (!party.alivePlayers.containsKey(it)){
+                                clearDungeonItems(it.toPlayer()?:return@forEach)
+                                return@forEach
+                            }
                             dungeonItemToItem(it.toPlayer()?:return@forEach)
                         }
                         party.teleport(DungeonTower.lobbyLocation)
@@ -321,8 +223,8 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
         }
 
         sEvent.register(PreCastEvent::class.java) { e ->
-            if (!party.players.containsKey(e.mage.entity.uniqueId))return@register
-            if (e.spell.category.name == "wing"){
+            if (!party.players.containsKey(e.mage?.entity?.uniqueId))return@register
+            if (e.spell?.category?.name == "wing"){
                 e.mage.sendMessage("§cwingは使えません")
                 e.isCancelled = true
             }
@@ -416,7 +318,7 @@ class DungeonTowerTask(val party: PartyData, val tower: TowerData): Thread() {
                     }
                 }
                 party.broadCast(SStr("&c&l時間切れ..."))
-                DungeonTowerLogSQL.timeOutDungeon(party, tower.internalName)
+                TowerLogDB.timeOutDungeon(party, tower.internalName)
                 Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
                     party.teleport(DungeonTower.lobbyLocation)
                     party.players.keys.forEach { uuid ->

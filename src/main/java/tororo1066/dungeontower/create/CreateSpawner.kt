@@ -19,9 +19,40 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
 
     override fun renderMenu(p: Player): Boolean {
         val items = arrayListOf(
-            createInputItem(SItem(Material.PLAYER_HEAD).setDisplayName("§aMythicMobを設定する").addLore("§d現在の値:§c${data.mob?.internalName}"),String::class.java){ str, _ ->
-                data.mob = DungeonTower.mythic.getMythicMob(str)?:return@createInputItem
-            },
+            SInventoryItem(SInventoryItem(Material.PLAYER_HEAD).setDisplayName("§aMythicMobを設定する").setCanClick(false).setClickEvent {
+                val inv = object : LargeSInventory("MythicMobを選択する") {
+                    override fun renderMenu(p: Player): Boolean {
+                        val items = arrayListOf<SInventoryItem>()
+                        data.mobs.forEach {
+                            items.add(SInventoryItem(Material.REDSTONE_BLOCK)
+                                .setDisplayName("§d確率:${it.first}/1000000§f,§6モブ:${it.second.internalName}")
+                                .addLore("§cシフト左クリックで削除")
+                                .setCanClick(false)
+                                .setClickEvent { e ->
+                                    if (e.click == ClickType.SHIFT_LEFT){
+                                        data.mobs.remove(it)
+                                        renderMenu(p)
+                                    }
+                                })
+                        }
+
+                        items.add(createInputItem(SItem(Material.EMERALD_BLOCK).setDisplayName("§a追加"), String::class.java,
+                            "§dMythicMobを選択してください"){ str, _ ->
+                            val mob = DungeonTower.mythic.getMythicMob(str)
+                            if (mob == null){
+                                p.sendPrefixMsg(SStr("§cそのMythicMobは存在しません！"))
+                                return@createInputItem
+                            }
+                            DungeonTower.sInput.sendInputCUI(p, Int::class.java, "§d確率を指定してください") { int ->
+                                data.mobs.add(Pair(int, mob))
+                                renderMenu(p)
+                            }
+                        })
+                        setResourceItems(items)
+                        return true
+                    }
+                }
+            }),
             createInputItem(SItem(Material.CLOCK).setDisplayName("§aCoolTime(tick)を設定する").addLore("§d現在の値:§c${data.coolTime}"),Int::class.java){ int, _ ->
                 data.coolTime = int
             },
@@ -71,7 +102,9 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
 
     private fun save(p: Player){
         val config = SJavaPlugin.sConfig.getConfig("spawners/${data.internalName}")?:YamlConfiguration()
-        config.set("mob",data.mob?.internalName)
+        data.mobs.forEach {
+            config.set("mobs.${it.second.internalName}",it.first)
+        }
         config.set("cooltime",data.coolTime)
         config.set("max",data.max)
         config.set("radius",data.radius)

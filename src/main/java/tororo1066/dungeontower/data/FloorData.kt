@@ -11,6 +11,7 @@ import com.sk89q.worldedit.session.ClipboardHolder
 import com.sk89q.worldedit.world.block.BlockTypes
 import io.lumine.mythic.bukkit.BukkitAdapter
 import io.lumine.mythic.bukkit.events.MythicMobDeathEvent
+import it.unimi.dsi.fastutil.Hash
 import net.kyori.adventure.text.Component
 import org.bukkit.*
 import org.bukkit.block.Chest
@@ -70,6 +71,8 @@ class FloorData: Cloneable {
     val clearTask = ArrayList<ClearTask>()
     val spawnerClearTasks = HashMap<UUID,Boolean>()
 
+    val waves = HashMap<Int,ArrayList<Pair<Int, WaveData>>>()
+
     lateinit var yml: YamlConfiguration
 
     fun callFloor() {
@@ -88,6 +91,11 @@ class FloorData: Cloneable {
 
         dungeonStartLoc = Location(DungeonTower.dungeonWorld, DungeonTower.nowX.toDouble(), DungeonTower.y.toDouble(), 0.0)
 
+        DungeonTower.nowX += abs(highX - lowX) + DungeonTower.dungeonXSpace
+        if (DungeonTower.xLimit <= DungeonTower.nowX){
+            DungeonTower.nowX = 0
+        }
+
         val region = CuboidRegion(
             BukkitWorld(DungeonTower.floorWorld),
             BlockVector3.at(lowX,lowY,lowZ),
@@ -103,7 +111,9 @@ class FloorData: Cloneable {
                 .ignoreAirBlocks(true)
                 .build()
             Operations.complete(operation)
+            Bukkit.broadcastMessage("終わり")
         }
+        Bukkit.broadcastMessage("次")
 
         for ((indexX, x) in (lowX..highX).withIndex()){
             for ((indexY, y) in (lowY..highY).withIndex()){
@@ -176,13 +186,13 @@ class FloorData: Cloneable {
 
                                             override fun run() {
                                                 if (spawner.count >= spawner.max)return
-                                                if (locSave.getNearbyPlayers(spawner.activateRange.toDouble()).isEmpty())return
+                                                if (locSave.getNearbyPlayers(spawner.activateRange.toDouble()).none { it.gameMode == GameMode.SURVIVAL })return
                                                 val spawnLoc = locSave.clone().add(
                                                     (-spawner.radius..spawner.radius).random().toDouble(),
                                                     spawner.yOffSet,
                                                     (-spawner.radius..spawner.radius).random().toDouble()
                                                 )
-                                                val mob = spawner.mob?.spawn(BukkitAdapter.adapt(spawnLoc),spawner.level)
+                                                val mob = spawner.randomMob().spawn(BukkitAdapter.adapt(spawnLoc),spawner.level)
                                                 locSave.world.playSound(locSave, Sound.BLOCK_END_PORTAL_FRAME_FILL, 1f, 1f)
                                                 locSave.world.spawnParticle(Particle.FLAME, locSave, 15)
                                                 mob?.entity?.dataContainer?.set(
@@ -216,11 +226,6 @@ class FloorData: Cloneable {
                 }
             }
         }
-
-        DungeonTower.nowX += abs(highX - lowX) + DungeonTower.dungeonXSpace
-        if (DungeonTower.xLimit <= DungeonTower.nowX){
-            DungeonTower.nowX = 0
-        }
         DungeonTower.createFloorNow = false
         return
     }
@@ -247,6 +252,15 @@ class FloorData: Cloneable {
     }
 
     fun removeFloor(){
+        DungeonTower.dungeonWorld.entities.filter {
+            spawnerClearTasks.containsKey(
+                UUID.fromString(it.persistentDataContainer.get(
+                    NamespacedKey(DungeonTower.plugin, "dmob"),
+                    PersistentDataType.STRING)?:return@filter false)
+            )
+        }.forEach {
+            it.remove()
+        }
         spawners.forEach {
             it.cancel()
         }

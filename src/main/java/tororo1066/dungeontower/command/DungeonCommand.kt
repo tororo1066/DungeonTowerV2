@@ -9,7 +9,7 @@ import org.bukkit.persistence.PersistentDataType
 import tororo1066.dungeontower.create.CreateTower
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.DungeonTower.Companion.sendPrefixMsg
-import tororo1066.dungeontower.DungeonTowerTask
+import tororo1066.dungeontower.task.DungeonTowerTask
 import tororo1066.dungeontower.create.CreateFloor
 import tororo1066.dungeontower.create.CreateLoot
 import tororo1066.dungeontower.create.CreateSpawner

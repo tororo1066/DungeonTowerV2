@@ -4,11 +4,13 @@ import io.lumine.mythic.api.mobs.MythicMob
 import org.bukkit.configuration.file.YamlConfiguration
 import tororo1066.dungeontower.DungeonTower
 import java.io.File
+import kotlin.random.Random
+import kotlin.random.nextInt
 
 class SpawnerData: Cloneable {
 
     var internalName = ""
-    var mob: MythicMob? = null
+    val mobs = ArrayList<Pair<Int, MythicMob>>()
     var count = 0
     var coolTime = 0
     var max = 0
@@ -20,6 +22,18 @@ class SpawnerData: Cloneable {
     var kill = 0
     var navigateKill = 0
 
+    fun randomMob(): MythicMob {
+        val random = Random.nextInt(1..1000000)
+        var preventRandom = 0
+        for (mob in mobs){
+            if (preventRandom < random && mob.first + preventRandom > random){
+                return mob.second
+            }
+            preventRandom = mob.first
+        }
+        throw NullPointerException("Couldn't find mob. Maybe sum percentage is not 1000000.")
+    }
+
     public override fun clone(): SpawnerData {
         return super.clone() as SpawnerData
     }
@@ -29,7 +43,14 @@ class SpawnerData: Cloneable {
             val yml = YamlConfiguration.loadConfiguration(file)
             val data = SpawnerData().apply {
                 internalName = file.nameWithoutExtension
-                mob = DungeonTower.mythic.getMythicMob(yml.getString("mob"))?:null
+                (DungeonTower.mythic.getMythicMob(yml.getString("mob")))?.let { mobs.add(Pair(1000000,it)) }
+                yml.getConfigurationSection("mobs")?.let {
+                    for (key in it.getKeys(false)){
+                        (DungeonTower.mythic.getMythicMob(key))?.let { mob ->
+                            mobs.add(Pair(it.getInt(key),mob))
+                        }
+                    }
+                }
                 coolTime = yml.getInt("cooltime")
                 max = yml.getInt("max")
                 yOffSet = yml.getDouble("yOffSet")

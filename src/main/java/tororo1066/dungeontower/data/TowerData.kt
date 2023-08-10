@@ -1,11 +1,15 @@
 package tororo1066.dungeontower.data
 
+import net.kyori.adventure.text.Component
+import org.bukkit.Bukkit
+import org.bukkit.Server
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.DungeonTower.Companion.sendPrefixMsg
 import tororo1066.tororopluginapi.SStr
+import tororo1066.tororopluginapi.script.ScriptFile
 import java.io.File
 import kotlin.random.Random
 import kotlin.random.nextInt
@@ -20,6 +24,12 @@ class TowerData: Cloneable {
     //フロアたち keyは階層、Pairのfirstは確率
     val floors = HashMap<Int,ArrayList<Pair<Int,FloorData>>>()
     var challengeItem: ItemStack? = null
+    var challengeScript: ScriptFile? = null
+
+    enum class RuleType {
+        FLOOR,
+        WAVE
+    }
 
     fun randomFloor(floorNum: Int): FloorData {
         val random = Random.nextInt(1..1000000)
@@ -37,6 +47,22 @@ class TowerData: Cloneable {
         if (partyData.players.size > partyLimit){
             p.sendPrefixMsg(SStr("&4${partyLimit}人以下でしか入れません (現在:${partyData.players.size}人)"))
             return false
+        }
+
+        if (challengeScript != null){
+            val result = challengeScript!!.startAsync().get()
+            if (result is Boolean){
+                if (!result){
+                    p.sendPrefixMsg(SStr("§c挑戦するための条件を満たしていません！"))
+                    return false
+                }
+            } else {
+                p.sendPrefixMsg(SStr("&4エラー。 運営に報告してください"))
+                Bukkit.broadcast(Component.text(
+                    "${DungeonTower.prefix}§c§l[ERROR] §r§c${challengeScript!!.file.name}の戻り値がBooleanではありません"
+                ), Server.BROADCAST_CHANNEL_ADMINISTRATIVE)
+                return false
+            }
         }
 
         if (challengeItem != null){
@@ -87,6 +113,8 @@ class TowerData: Cloneable {
                 }
 
                 challengeItem = yml.getItemStack("challengeItem")
+                challengeScript = yml.getString("challengeScript")
+                    ?.let { ScriptFile(File(DungeonTower.plugin.dataFolder, it)) }
             }
 
             return Pair(data.internalName, data)

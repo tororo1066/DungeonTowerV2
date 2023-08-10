@@ -10,8 +10,8 @@ import org.bukkit.event.player.PlayerQuitEvent
 import tororo1066.dungeontower.command.DungeonCommand
 import tororo1066.dungeontower.command.DungeonTaskCommand
 import tororo1066.dungeontower.data.*
-import tororo1066.dungeontower.sql.DungeonTowerLogSQL
-import tororo1066.dungeontower.sql.DungeonTowerPartyLogSQL
+import tororo1066.dungeontower.script.TodayEntryNumberFunction
+import tororo1066.dungeontower.sql.TowerLogDB
 import tororo1066.tororopluginapi.SInput
 import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
@@ -63,8 +63,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
 
             mysql = SMySQL(plugin)
             DungeonCommand()
-            DungeonTowerLogSQL()
-            DungeonTowerPartyLogSQL()
+            TowerLogDB()
         }
     }
 
@@ -102,6 +101,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
         getCommand("dungeontask")?.setExecutor(dungeonTaskCommand)
         getCommand("dungeontask")?.tabCompleter = dungeonTaskCommand
         DungeonCommand()
+        TodayEntryNumberFunction.registerFunction()
 
         SEvent(this).register(PlayerQuitEvent::class.java,EventPriority.LOWEST) { e ->
             if (playNow.contains(e.player.uniqueId))return@register
