@@ -173,9 +173,15 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
                         }
                         nowFloor.callFloor()
                         party.smokeStan(60)
+                        party.players.keys.forEach {
+                            moveLockPlayers.add(it)
+                        }
                         unlockedChest = false
                         party.teleport(nowFloor.preventFloorStairs.random().add(0.0,1.1,0.0))
                         callCommand(nowFloor)
+                        party.players.keys.forEach {
+                            moveLockPlayers.remove(it)
+                        }
                         preventFloor.removeFloor()
                     }
                 }

@@ -17,7 +17,7 @@ class LootData: LootTable, Cloneable {
 
     //内部名
     var internalName = ""
-    val items = ArrayList<Triple<Int,IntRange, SItem>>()//確率、個数、ItemStack
+    val items = ArrayList<Triple<Int,IntProgression, SItem>>()//確率、個数、ItemStack
     var rollAmount = 0
     var displayName = ""
 
@@ -31,7 +31,7 @@ class LootData: LootTable, Cloneable {
             var preventRandom = 0
             for (item in items){
                 if (preventRandom < randomNum && item.first + preventRandom > randomNum){
-                    val sumAmount = item.second.random()
+                    val sumAmount = item.second.toList().random()
                     val stackAmount = sumAmount / 64
                     val amount = sumAmount % 64
                     val dungeonItem = item.third.clone().setCustomData(

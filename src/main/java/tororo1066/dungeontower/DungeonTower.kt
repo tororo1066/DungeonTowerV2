@@ -61,7 +61,6 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
             lobbyLocation = plugin.config.getLocation("lobbyLocation", Location(null,0.0,0.0,0.0))!!
             dungeonXSpace = plugin.config.getInt("dungeonXSpace",5)
 
-            mysql = SMySQL(plugin)
             DungeonCommand()
             TowerLogDB()
         }
@@ -101,6 +100,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
         getCommand("dungeontask")?.setExecutor(dungeonTaskCommand)
         getCommand("dungeontask")?.tabCompleter = dungeonTaskCommand
         DungeonCommand()
+        TowerLogDB()
         TodayEntryNumberFunction.registerFunction()
 
         SEvent(this).register(PlayerQuitEvent::class.java,EventPriority.LOWEST) { e ->

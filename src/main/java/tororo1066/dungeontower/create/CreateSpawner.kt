@@ -19,7 +19,7 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
 
     override fun renderMenu(p: Player): Boolean {
         val items = arrayListOf(
-            SInventoryItem(SInventoryItem(Material.PLAYER_HEAD).setDisplayName("§aMythicMobを設定する").setCanClick(false).setClickEvent {
+            SInventoryItem(Material.PLAYER_HEAD).setDisplayName("§aMythicMobを設定する").setCanClick(false).setClickEvent {
                 val inv = object : LargeSInventory("MythicMobを選択する") {
                     override fun renderMenu(p: Player): Boolean {
                         val items = arrayListOf<SInventoryItem>()
@@ -37,7 +37,7 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
                         }
 
                         items.add(createInputItem(SItem(Material.EMERALD_BLOCK).setDisplayName("§a追加"), String::class.java,
-                            "§dMythicMobを選択してください"){ str, _ ->
+                            "§dMythicMobを選択してください", true){ str, _ ->
                             val mob = DungeonTower.mythic.getMythicMob(str)
                             if (mob == null){
                                 p.sendPrefixMsg(SStr("§cそのMythicMobは存在しません！"))
@@ -45,14 +45,15 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
                             }
                             DungeonTower.sInput.sendInputCUI(p, Int::class.java, "§d確率を指定してください") { int ->
                                 data.mobs.add(Pair(int, mob))
-                                renderMenu(p)
+                                open(p)
                             }
                         })
                         setResourceItems(items)
                         return true
                     }
                 }
-            }),
+                moveChildInventory(inv, p)
+            },
             createInputItem(SItem(Material.CLOCK).setDisplayName("§aCoolTime(tick)を設定する").addLore("§d現在の値:§c${data.coolTime}"),Int::class.java){ int, _ ->
                 data.coolTime = int
             },
@@ -102,6 +103,7 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
 
     private fun save(p: Player){
         val config = SJavaPlugin.sConfig.getConfig("spawners/${data.internalName}")?:YamlConfiguration()
+        config.set("mob",null)
         data.mobs.forEach {
             config.set("mobs.${it.second.internalName}",it.first)
         }

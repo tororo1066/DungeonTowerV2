@@ -14,6 +14,7 @@ import tororo1066.tororopluginapi.defaultMenus.LargeSInventory
 import tororo1066.tororopluginapi.defaultMenus.SingleItemInventory
 import tororo1066.tororopluginapi.sInventory.SInventoryItem
 import tororo1066.tororopluginapi.sItem.SItem
+import tororo1066.tororopluginapi.script.ScriptFile
 import java.io.File
 import java.util.function.Consumer
 
@@ -22,8 +23,8 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
     override fun renderMenu(p: Player): Boolean {
         val items = arrayListOf(
             createInputItem(SItem(Material.GRASS_BLOCK).setDisplayName("§a名前を設定する")
-                .addLore("§d現在の値:§c${data.name}"),String::class.java) { str, _ ->
-                data.name = str
+                .addLore("§d現在の値:§c${data.name}"),SStr::class.java) { str, _ ->
+                data.name = str.toString()
             },
             createInputItem(SItem(Material.EMERALD_BLOCK).setDisplayName("§a最大人数を設定する")
                 .addLore("§d現在の値:§c${data.partyLimit}"),Int::class.java) { int, _ ->
@@ -45,6 +46,15 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
 
                     moveChildInventory(inv,p)
                 },
+            createInputItem(SItem(Material.REDSTONE_BLOCK).setDisplayName("§a挑戦出来るか確認するスクリプトを設定する")
+                .addLore("§d現在の値:${data.challengeScript}"),String::class.java) { str, _ ->
+                val file = File(DungeonTower.plugin.dataFolder,str)
+                if (!file.exists()){
+                    p.sendPrefixMsg(SStr("&cファイルが存在しません"))
+                    return@createInputItem
+                }
+                data.challengeScript = file.toRelativeString(DungeonTower.plugin.dataFolder)
+            },
             SInventoryItem(Material.COMMAND_BLOCK).setDisplayName("§aフロアの設定").setCanClick(false).setClickEvent { e ->
                 val inv = object : LargeSInventory(DungeonTower.plugin, "フロアの設定") {
                     override fun renderMenu(p: Player): Boolean {
@@ -129,6 +139,7 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
         config.set("name",data.name)
         config.set("partyLimit",data.partyLimit)
         data.challengeItem?.let { config.set("challengeItem",it) }
+        data.challengeScript?.let { config.set("challengeScript",it) }
 
         data.floors.forEach { (floorNum, array) ->
             val list = ArrayList<String>()

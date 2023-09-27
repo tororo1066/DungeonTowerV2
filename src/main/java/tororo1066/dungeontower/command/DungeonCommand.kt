@@ -22,7 +22,9 @@ import tororo1066.tororopluginapi.sCommand.SCommand
 import tororo1066.tororopluginapi.sCommand.SCommandArg
 import tororo1066.tororopluginapi.sCommand.SCommandArgType
 import tororo1066.tororopluginapi.sItem.SItem
+import tororo1066.tororopluginapi.utils.LocType
 import tororo1066.tororopluginapi.utils.sendMessage
+import tororo1066.tororopluginapi.utils.toLocString
 import tororo1066.tororopluginapi.utils.toPlayer
 import java.util.UUID
 
@@ -121,7 +123,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
             }
             val party = PartyData()
             party.parent = it.sender.uniqueId
-            party.players[it.sender.uniqueId] = UserData(it.sender.uniqueId,it.sender.name)
+            party.players[it.sender.uniqueId] = UserData(it.sender.uniqueId,it.sender.name,it.sender.address.address.hostAddress)
             DungeonTower.partiesData[it.sender.uniqueId] = party
             it.sender.sendPrefixMsg(SStr("&aパーティーを作成しました！"))
         }
@@ -179,7 +181,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
             }
             accepts[it.sender.uniqueId]!!.remove(p.uniqueId)
             val party = DungeonTower.partiesData[it.sender.uniqueId]!!
-            party.players[p.uniqueId] = UserData(p.uniqueId,p.name)
+            party.players[p.uniqueId] = UserData(p.uniqueId,p.name,p.address.address.hostAddress)
             it.sender.sendPrefixMsg(SStr("&a${p.name}をパーティーに追加しました"))
             party.broadCast(SStr("&a${p.name}がパーティーに参加しました"))
         }
@@ -229,6 +231,25 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
             data.players.values.forEach { userData ->
                 it.sender.sendMessage("§d${if (data.parent == userData.uuid) "パーティリーダー " else ""}§a${userData.mcid}")
             }
+        }
+    }
+
+    @SCommandBody("dungeon.op")
+    val partyList = command().addArg(SCommandArg("parties")).setNormalExecutor {
+        DungeonTower.partiesData.values.filterNotNull().forEach { party ->
+            party.players.values.forEach { userData ->
+                it.sender.sendMessage("§d${if (party.parent == userData.uuid) "パーティリーダー " else ""}§a${userData.mcid}")
+            }
+            it.sender.sendMessage("§dプレイ中: ${party.nowTask != null}")
+            if (party.nowTask != null){
+                it.sender.sendMessage("§dダンジョン: §r${party.nowTask!!.tower.name}")
+                it.sender.sendMessage(SStr(
+                        "§d位置: ${party.nowTask!!.nowFloor.startLoc.toLocString(LocType.BLOCK_SPACE)}"
+                )
+                        .commandText("/minecraft:tp ${party.nowTask!!.nowFloor.startLoc.toLocString(LocType.BLOCK_SPACE)}")
+                        .hoverText("§aクリックでテレポート"))
+            }
+            it.sender.sendMessage("§6====================")
         }
     }
 
@@ -336,6 +357,31 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
         }
 
     @SCommandBody("dungeon.op")
+    val copyFloor = command().addArg(SCommandArg("copy")).addArg(SCommandArg("floor"))
+        .addArg(SCommandArg(DungeonTower.floorData.keys).addAlias("コピー元")).addArg(SCommandArg(SCommandArgType.STRING).addAlias("内部名"))
+        .setPlayerExecutor {
+            val meta = it.sender.inventory.itemInMainHand.itemMeta
+            val firstLoc =
+                meta?.persistentDataContainer?.get(NamespacedKey(DungeonTower.plugin,"firstloc"), PersistentDataType.STRING)
+            val secondLoc =
+                meta?.persistentDataContainer?.get(NamespacedKey(DungeonTower.plugin,"secondloc"), PersistentDataType.STRING)
+
+            val copy = DungeonTower.floorData[it.args[2]]!!.newInstance()
+            copy.internalName = it.args[3]
+            if (firstLoc == null || secondLoc == null){
+                CreateFloor(copy,false).open(it.sender)
+                return@setPlayerExecutor
+            }
+            val startLoc = firstLoc.split(",").map { map -> map.toDouble() }
+            val endLoc = secondLoc.split(",").map { map -> map.toDouble() }
+
+            copy.startLoc = Location(DungeonTower.floorWorld,startLoc[0],startLoc[1],startLoc[2])
+            copy.endLoc = Location(DungeonTower.floorWorld,endLoc[0],endLoc[1],endLoc[2])
+            CreateFloor(copy,false).open(it.sender)
+            return@setPlayerExecutor
+        }
+
+    @SCommandBody("dungeon.op")
     val createLoot = command().addArg(SCommandArg("create")).addArg(SCommandArg("loot"))
         .addArg(SCommandArg(SCommandArgType.STRING).addAlias("内部名"))
         .setPlayerExecutor {
@@ -363,6 +409,15 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
         }
 
     @SCommandBody("dungeon.op")
+    val copyLoot = command().addArg(SCommandArg("copy")).addArg(SCommandArg("loot"))
+        .addArg(SCommandArg(DungeonTower.lootData.keys).addAlias("コピー元")).addArg(SCommandArg(SCommandArgType.STRING).addAlias("内部名"))
+        .setPlayerExecutor {
+            val copy = DungeonTower.lootData[it.args[2]]!!.clone()
+            copy.internalName = it.args[3]
+            CreateLoot(copy,false).open(it.sender)
+        }
+
+    @SCommandBody("dungeon.op")
     val createSpawner = command().addArg(SCommandArg("create")).addArg(SCommandArg("spawner"))
         .addArg(SCommandArg(SCommandArgType.STRING).addAlias("内部名"))
         .setPlayerExecutor {
@@ -387,6 +442,15 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
                 return@setPlayerExecutor
             }
             CreateSpawner(DungeonTower.spawnerData[it.args[2]]!!.clone(),true).open(it.sender)
+        }
+
+    @SCommandBody("dungeon.op")
+    val copySpawner = command().addArg(SCommandArg("copy")).addArg(SCommandArg("spawner"))
+        .addArg(SCommandArg(DungeonTower.spawnerData.keys).addAlias("コピー元")).addArg(SCommandArg(SCommandArgType.STRING).addAlias("内部名"))
+        .setPlayerExecutor {
+            val copy = DungeonTower.spawnerData[it.args[2]]!!.clone()
+            copy.internalName = it.args[3]
+            CreateSpawner(copy,false).open(it.sender)
         }
 
     @SCommandBody("dungeon.op")
@@ -424,6 +488,18 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
             val hit = it.sender.rayTraceBlocks(4.0)?.hitBlock?:return@setPlayerExecutor
             val state = hit.state as? Sign?:return@setPlayerExecutor
             state.setLine(0,"spawner")
+            state.setLine(1,it.args[2])
+            state.update(true)
+        }
+
+    @SCommandBody("dungeon.op")
+    val modifyLootSign = command().addArg(SCommandArg("sign"))
+        .addArg(SCommandArg("loot"))
+        .addArg(SCommandArg(DungeonTower.lootData.keys))
+        .setPlayerExecutor {
+            val hit = it.sender.rayTraceBlocks(4.0)?.hitBlock?:return@setPlayerExecutor
+            val state = hit.state as? Sign?:return@setPlayerExecutor
+            state.setLine(0,"loot")
             state.setLine(1,it.args[2])
             state.update(true)
         }

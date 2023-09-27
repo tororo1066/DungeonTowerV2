@@ -88,12 +88,10 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
                         PersistentDataType.INTEGER
                     )){
                     it.editMeta { meta -> meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin, "dannouncementitem")) }
-                    if (DungeonTower.plugin.server.messenger.isReservedChannel("tororo:dungeontower")){
-                        val out = ByteStreams.newDataOutput()
-                        out.writeUTF("message")
-                        out.writeUTF("${DungeonTower.prefix}§e§l${p.name}§dが§r${it.itemMeta.displayName}§dを手に入れた！")
-                        DungeonTower.plugin.server.sendPluginMessage(DungeonTower.plugin, "tororo:dungeontower", out.toByteArray())
-                    }
+                    val out = ByteStreams.newDataOutput()
+                    out.writeUTF("message")
+                    out.writeUTF("${DungeonTower.prefix}§e§l${p.name}§dが§r${it.itemMeta.displayName}§dを手に入れた！")
+                    DungeonTower.plugin.server.sendPluginMessage(DungeonTower.plugin, "tororo:dungeontower", out.toByteArray())
                     SStr("${DungeonTower.prefix}§e§l${p.name}§dが§r${it.itemMeta.displayName}§dを手に入れた！").broadcast()
                 }
             }

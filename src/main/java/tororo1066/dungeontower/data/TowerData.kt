@@ -24,7 +24,7 @@ class TowerData: Cloneable {
     //フロアたち keyは階層、Pairのfirstは確率
     val floors = HashMap<Int,ArrayList<Pair<Int,FloorData>>>()
     var challengeItem: ItemStack? = null
-    var challengeScript: ScriptFile? = null
+    var challengeScript: String? = null
 
     enum class RuleType {
         FLOOR,
@@ -50,7 +50,12 @@ class TowerData: Cloneable {
         }
 
         if (challengeScript != null){
-            val result = challengeScript!!.startAsync().get()
+            val scriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, "$challengeScript"))
+            scriptFile.debug = true
+            scriptFile.publicVariables["name"] = p.name
+            scriptFile.publicVariables["uuid"] = p.uniqueId.toString()
+            scriptFile.publicVariables["ip"] = p.address.address.hostAddress
+            val result = scriptFile.startAsync().get()
             if (result is Boolean){
                 if (!result){
                     p.sendPrefixMsg(SStr("§c挑戦するための条件を満たしていません！"))
@@ -59,7 +64,7 @@ class TowerData: Cloneable {
             } else {
                 p.sendPrefixMsg(SStr("&4エラー。 運営に報告してください"))
                 Bukkit.broadcast(Component.text(
-                    "${DungeonTower.prefix}§c§l[ERROR] §r§c${challengeScript!!.file.name}の戻り値がBooleanではありません"
+                    "${DungeonTower.prefix}§4§l[ERROR] §r§c${scriptFile.file.name}の戻り値がBooleanではありません"
                 ), Server.BROADCAST_CHANNEL_ADMINISTRATIVE)
                 return false
             }
@@ -114,7 +119,6 @@ class TowerData: Cloneable {
 
                 challengeItem = yml.getItemStack("challengeItem")
                 challengeScript = yml.getString("challengeScript")
-                    ?.let { ScriptFile(File(DungeonTower.plugin.dataFolder, it)) }
             }
 
             return Pair(data.internalName, data)

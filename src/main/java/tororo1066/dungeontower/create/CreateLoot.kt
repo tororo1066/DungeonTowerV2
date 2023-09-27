@@ -34,7 +34,7 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJava
                         val items = arrayListOf<SInventoryItem>()
                         data.items.forEach {
                             items.add(SInventoryItem(it.third)
-                                .addLore("§a確率:${it.first}/1000000,§b個数:${it.second}",
+                                .addLore("§a確率:${it.first}/1000000,§b個数:${it.second.first}..${it.second.last}",
                                     "§6持ち帰れたときのアナウンス:${it.third.getCustomData(DungeonTower.plugin,"dannouncementitem",
                                         PersistentDataType.INTEGER) != null}",
                                     "§cシフト左クリックで削除").setCanClick(false).setClickEvent second@ { e ->
@@ -53,7 +53,7 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJava
                                 return@createInputItem
                             }
 
-                            DungeonTower.sInput.sendInputCUI(p,IntRange::class.java,"§d個数を入力してください(<最低>..<最高>)") { intRange ->
+                            DungeonTower.sInput.sendInputCUI(p,IntProgression::class.java,"§d個数を入力してください(<最低>..<最高>)") { intRange ->
                                 DungeonTower.sInput.sendInputCUI(p,Boolean::class.java,
                                     "§d持ち帰れたときにアナウンスするか決めてください(true/false)") { bool ->
                                     val sItem = SItem(item.clone()).apply {

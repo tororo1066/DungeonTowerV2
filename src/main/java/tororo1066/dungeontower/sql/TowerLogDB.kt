@@ -1,5 +1,6 @@
 package tororo1066.dungeontower.sql
 
+import com.mongodb.client.model.Filters
 import com.mongodb.client.model.Updates
 import org.bson.Document
 import tororo1066.dungeontower.DungeonTower
@@ -20,7 +21,8 @@ class TowerLogDB {
                     "id" to SDBVariable(SDBVariable.Int, autoIncrement = true),
                     "party_uuid" to SDBVariable(SDBVariable.VarChar, length = 36, nullable = false, index = SDBVariable.Index.UNIQUE),
                     "uuid" to SDBVariable(SDBVariable.Text),
-                    "name" to SDBVariable(SDBVariable.Text)
+                    "name" to SDBVariable(SDBVariable.Text),
+                    "ip" to SDBVariable(SDBVariable.Text)
                 ))
         }
 
@@ -37,22 +39,23 @@ class TowerLogDB {
     companion object{
 
         lateinit var database: SDatabase
-        fun insertPartyData(partyData: PartyData){
+        fun insertPartyData(partyData: PartyData) {
             if (database.isMongo){
-                database.backGroundInsert("tower_log",
+                database.insert("tower_log",
                     mapOf(
                         "party_uuid" to partyData.partyUUID.toString(),
                         "users" to partyData.players.map {
-                            mapOf("uuid" to it.key.toString(), "name" to it.value.mcid)
+                            mapOf("uuid" to it.key.toString(), "name" to it.value.mcid, "ip" to it.value.ip)
                         },
                         "actions" to listOf<Document>()
                     ))
             } else {
-                database.backGroundInsert("party_log",
+                database.insert("party_log",
                     mapOf(
-                        "party_uuid" to partyData.partyUUID,
-                        "uuid" to partyData.players.keys.joinToString("\r\n"),
-                        "name" to partyData.players.map { it.value.mcid }.joinToString("\r\n")
+                        "party_uuid" to partyData.partyUUID.toString(),
+                        "uuid" to partyData.players.keys.joinToString("\r\n") { it.toString() },
+                        "name" to partyData.players.values.joinToString("\r\n") { it.mcid },
+                        "ip" to partyData.players.values.joinToString("\r\n") { it.ip }
                     ))
             }
         }
@@ -67,15 +70,15 @@ class TowerLogDB {
             } else {
                 database.backGroundInsert("tower_log",
                     mapOf(
-                        "party_uuid" to partyData.partyUUID,
+                        "party_uuid" to partyData.partyUUID.toString(),
                         "action" to action,
                         "value" to value,
-                        "date" to "now()"
+                        "date" to Date().toSQLVariable(SDBVariable.DateTime)
                     ))
             }
         }
 
-        fun selectTodayEntryCount(): Int {
+        fun getTodayEntryCount(uuid: String, ip: String, dungeons: List<String>? = null): Int {
             val time = Calendar.getInstance().apply {
                 set(Calendar.HOUR, 0)
                 set(Calendar.MINUTE, 0)
@@ -83,14 +86,23 @@ class TowerLogDB {
                 set(Calendar.MILLISECOND, 0)
             }.time
             return if (database.isMongo){
-                database.asyncSelect("tower_log",
-                    SDBCondition().equal("action", "ENTER_DUNGEON")
-                        .and().lessThan("actions.date", time)
-                ).get().count()
+                val condition = SDBCondition().equal("actions.action", "ENTER_DUNGEON")
+                    .and(SDBCondition().equal("users.ip",ip).or(SDBCondition().equal("users.uuid",uuid)))
+                    .and(SDBCondition().orHigher("actions.date", time))
+                if (dungeons != null){
+                    condition.and(SDBCondition().include("actions.value", dungeons))
+                }
+                database.asyncSelect("tower_log", condition).get().count()
             } else {
-                database.asyncSelect("tower_log",
-                    SDBCondition().equal("action", "ENTER_DUNGEON")
-                        .and().lessThan("date", time.toSQLVariable(SDBVariable.DateTime))
+                val condition = SDBCondition().equal("action", "ENTER_DUNGEON")
+                    .and(SDBCondition().like("ip", ip).or(SDBCondition().like("uuid", uuid)))
+                    .and(SDBCondition().orHigher("date", time.toSQLVariable(SDBVariable.DateTime)))
+                if (dungeons != null){
+                    condition.and(SDBCondition().include("value", dungeons))
+                }
+                database.asyncSelect(
+                    "tower_log join party_log on tower_log.party_uuid = party_log.party_uuid",
+                    condition
                 ).get().count()
             }
         }

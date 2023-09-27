@@ -91,11 +91,6 @@ class FloorData: Cloneable {
 
         dungeonStartLoc = Location(DungeonTower.dungeonWorld, DungeonTower.nowX.toDouble(), DungeonTower.y.toDouble(), 0.0)
 
-        DungeonTower.nowX += abs(highX - lowX) + DungeonTower.dungeonXSpace
-        if (DungeonTower.xLimit <= DungeonTower.nowX){
-            DungeonTower.nowX = 0
-        }
-
         val region = CuboidRegion(
             BukkitWorld(DungeonTower.floorWorld),
             BlockVector3.at(lowX,lowY,lowZ),
@@ -111,9 +106,12 @@ class FloorData: Cloneable {
                 .ignoreAirBlocks(true)
                 .build()
             Operations.complete(operation)
-            Bukkit.broadcastMessage("終わり")
         }
-        Bukkit.broadcastMessage("次")
+
+        DungeonTower.nowX += abs(highX - lowX) + DungeonTower.dungeonXSpace
+        if (DungeonTower.xLimit <= DungeonTower.nowX){
+            DungeonTower.nowX = 0
+        }
 
         for ((indexX, x) in (lowX..highX).withIndex()){
             for ((indexY, y) in (lowY..highY).withIndex()){
@@ -186,7 +184,8 @@ class FloorData: Cloneable {
 
                                             override fun run() {
                                                 if (spawner.count >= spawner.max)return
-                                                if (locSave.getNearbyPlayers(spawner.activateRange.toDouble()).none { it.gameMode == GameMode.SURVIVAL })return
+                                                if (locSave.getNearbyPlayers(spawner.activateRange.toDouble())
+                                                    .none { it.gameMode == GameMode.SURVIVAL || it.gameMode == GameMode.ADVENTURE })return
                                                 val spawnLoc = locSave.clone().add(
                                                     (-spawner.radius..spawner.radius).random().toDouble(),
                                                     spawner.yOffSet,

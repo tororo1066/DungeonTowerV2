@@ -7,6 +7,7 @@ import org.bukkit.scoreboard.Scoreboard
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.task.DungeonTowerTask
 import tororo1066.tororopluginapi.SStr
+import tororo1066.tororopluginapi.utils.sendMessage
 import tororo1066.tororopluginapi.utils.toPlayer
 import java.util.*
 import kotlin.collections.HashMap
@@ -22,7 +23,7 @@ class PartyData: Cloneable {
 
     fun broadCast(str: SStr){
         players.keys.forEach {
-            it.toPlayer()?.sendMessage(DungeonTower.prefix.toPaperComponent().append(str.toPaperComponent()))
+            it.toPlayer()?.sendMessage(DungeonTower.prefix + str)
         }
     }
 

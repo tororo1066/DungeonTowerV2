@@ -43,10 +43,10 @@ class SpawnerData: Cloneable {
             val yml = YamlConfiguration.loadConfiguration(file)
             val data = SpawnerData().apply {
                 internalName = file.nameWithoutExtension
-                (DungeonTower.mythic.getMythicMob(yml.getString("mob")))?.let { mobs.add(Pair(1000000,it)) }
+                DungeonTower.mythic.getMythicMob(yml.getString("mob",""))?.let { mobs.add(Pair(1000000,it)) }
                 yml.getConfigurationSection("mobs")?.let {
                     for (key in it.getKeys(false)){
-                        (DungeonTower.mythic.getMythicMob(key))?.let { mob ->
+                        DungeonTower.mythic.getMythicMob(key)?.let { mob ->
                             mobs.add(Pair(it.getInt(key),mob))
                         }
                     }
