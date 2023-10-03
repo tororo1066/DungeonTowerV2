@@ -36,7 +36,7 @@ dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.19.3-R0.1-SNAPSHOT'
     api "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     api fileTree(dir: 'libs', include: '*.jar')
-    api 'com.github.tororo1066.TororoPluginAPI:TororoPluginAPI:0266ab85e1'
+    api 'com.github.tororo1066.TororoPluginAPI:TororoPluginAPI:26d6f1fcca'
     compileOnly "io.lumine:Mythic-Dist:5.0.4-SNAPSHOT"
     compileOnly 'com.sk89q.worldedit:worldedit-bukkit:7.2.9'
     compileOnly 'com.elmakers.mine.bukkit:MagicAPI:10.2'

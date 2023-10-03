@@ -15,6 +15,8 @@ import tororo1066.dungeontower.create.CreateLoot
 import tororo1066.dungeontower.create.CreateSpawner
 import tororo1066.dungeontower.data.*
 import tororo1066.dungeontower.inventory.RuleInventory
+import tororo1066.dungeontower.skilltree.ActionBarBaseGUI
+import tororo1066.dungeontower.skilltree.TitleGUI
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.annotation.SCommandBody
 import tororo1066.tororopluginapi.otherClass.StrExcludeFileIllegalCharacter
@@ -503,5 +505,31 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
             state.setLine(1,it.args[2])
             state.update(true)
         }
+
+    lateinit var titleGUI: TitleGUI
+
+    @SCommandBody("dungeon.op")
+    val testGUI = command().addArg(SCommandArg("test")).setPlayerExecutor {
+        titleGUI = TitleGUI(it.sender)
+        titleGUI.show()
+    }
+
+    @SCommandBody("dungeon.op")
+    val testGUI2 = command().addArg(SCommandArg("test2")).setPlayerExecutor {
+        titleGUI.stop()
+    }
+
+    lateinit var actionBarBaseGUI: ActionBarBaseGUI
+
+    @SCommandBody("dungeon.op")
+    val testGUI3 = command().addArg(SCommandArg("test3")).setPlayerExecutor {
+        actionBarBaseGUI = ActionBarBaseGUI(it.sender)
+        actionBarBaseGUI.show()
+    }
+
+    @SCommandBody("dungeon.op")
+    val testGUI4 = command().addArg(SCommandArg("test4")).setPlayerExecutor {
+        actionBarBaseGUI.stop()
+    }
 
 }
