@@ -31,6 +31,10 @@ class TowerData: Cloneable {
         WAVE
     }
 
+    fun isExistFloor(floorNum: Int): Boolean {
+        return floors.containsKey(floorNum)
+    }
+
     fun randomFloor(floorNum: Int): FloorData {
         val random = Random.nextInt(1..1000000)
         var preventRandom = 0

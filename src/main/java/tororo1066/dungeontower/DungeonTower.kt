@@ -61,6 +61,36 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
             lobbyLocation = plugin.config.getLocation("lobbyLocation", Location(null,0.0,0.0,0.0))!!
             dungeonXSpace = plugin.config.getInt("dungeonXSpace",5)
 
+            floorData.clear()
+            lootData.clear()
+            spawnerData.clear()
+            towerData.clear()
+
+            sConfig.mkdirs("floors")
+            sConfig.loadAllFiles("floors").forEach {
+                val floor = FloorData.loadFromYml(it)
+                floorData[floor.first] = floor.second
+            }
+
+            sConfig.mkdirs("loots")
+            sConfig.loadAllFiles("loots").forEach {
+                val loot = LootData.loadFromYml(it)
+                lootData[loot.first] = loot.second
+            }
+
+            sConfig.mkdirs("spawners")
+            sConfig.loadAllFiles("spawners").forEach {
+                val spawner = SpawnerData.loadFromYml(it)
+                spawnerData[spawner.first] = spawner.second
+            }
+
+            sConfig.mkdirs("towers")
+            sConfig.loadAllFiles("towers").forEach {
+                val tower = TowerData.loadFromYml(it)
+                towerData[tower.first] = tower.second
+            }
+
+
             DungeonCommand()
             TowerLogDB()
         }
@@ -72,30 +102,6 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
         sInput = SInput(this)
         util = UsefulUtility(this)
         reloadDungeonConfig()
-
-        sConfig.mkdirs("floors")
-        sConfig.loadAllFiles("floors").forEach {
-            val floor = FloorData.loadFromYml(it)
-            floorData[floor.first] = floor.second
-        }
-
-        sConfig.mkdirs("loots")
-        sConfig.loadAllFiles("loots").forEach {
-            val loot = LootData.loadFromYml(it)
-            lootData[loot.first] = loot.second
-        }
-
-        sConfig.mkdirs("spawners")
-        sConfig.loadAllFiles("spawners").forEach {
-            val spawner = SpawnerData.loadFromYml(it)
-            spawnerData[spawner.first] = spawner.second
-        }
-
-        sConfig.mkdirs("towers")
-        sConfig.loadAllFiles("towers").forEach {
-            val tower = TowerData.loadFromYml(it)
-            towerData[tower.first] = tower.second
-        }
         val dungeonTaskCommand = DungeonTaskCommand()
         getCommand("dungeontask")?.setExecutor(dungeonTaskCommand)
         getCommand("dungeontask")?.tabCompleter = dungeonTaskCommand

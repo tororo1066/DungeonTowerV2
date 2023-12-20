@@ -6,12 +6,11 @@ import com.sk89q.worldedit.extent.clipboard.BlockArrayClipboard
 import com.sk89q.worldedit.function.operation.ForwardExtentCopy
 import com.sk89q.worldedit.function.operation.Operations
 import com.sk89q.worldedit.math.BlockVector3
+import com.sk89q.worldedit.math.transform.AffineTransform
 import com.sk89q.worldedit.regions.CuboidRegion
 import com.sk89q.worldedit.session.ClipboardHolder
 import com.sk89q.worldedit.world.block.BlockTypes
 import io.lumine.mythic.bukkit.BukkitAdapter
-import io.lumine.mythic.bukkit.events.MythicMobDeathEvent
-import it.unimi.dsi.fastutil.Hash
 import net.kyori.adventure.text.Component
 import org.bukkit.*
 import org.bukkit.block.Chest
@@ -24,7 +23,6 @@ import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.loot.LootContext
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitRunnable
-import org.bukkit.scheduler.BukkitTask
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.tororopluginapi.sEvent.SEvent
 import java.io.File
@@ -32,7 +30,10 @@ import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.sin
+import kotlin.random.nextInt
 
 class FloorData: Cloneable {
 
@@ -41,9 +42,20 @@ class FloorData: Cloneable {
         ENTER_COMMAND
     }
 
-    class ClearTask(val type: ClearTaskEnum, var need: Int = 0,
-                    var count: Int = 0, var clear: Boolean = false,
-                    var scoreboardName: String = "", var clearScoreboardName: String = ""): Cloneable {
+    enum class ClearCondition {
+        CLEAR_PARENT,
+        CLEAR_PARENT_AND_SELF,
+        CLEAR_PARALLEL,
+        CLEAR_PARALLEL_AND_SELF,
+        CLEAR_ALL
+    }
+
+    class ClearTask(
+        val type: ClearTaskEnum, var need: Int = 0,
+        var count: Int = 0, var clear: Boolean = false,
+        var scoreboardName: String = "", var clearScoreboardName: String = "",
+        var condition: ClearCondition = ClearCondition.CLEAR_ALL
+    ): Cloneable {
 
         public override fun clone(): ClearTask {
             return super.clone() as ClearTask
@@ -59,24 +71,144 @@ class FloorData: Cloneable {
     var time = 300
 
     var dungeonStartLoc: Location? = null
-
-    var lastFloor = true
+    var dungeonEndLoc: Location? = null
 
     val preventFloorStairs = ArrayList<Location>()
     val nextFloorStairs = ArrayList<Location>()//使わないかもしれない
-    val spawners = ArrayList<BukkitTask>()
+    val spawners = ArrayList<SpawnerRunnable>()
 
     val joinCommands = ArrayList<String>()
 
     val clearTask = ArrayList<ClearTask>()
     val spawnerClearTasks = HashMap<UUID,Boolean>()
 
+    val parallelFloors = ArrayList<FloorData>()
+    var parallelFloor = false
+    lateinit var parent: FloorData
+
+    val subFloors = ArrayList<Pair<Int, FloorData>>()
+
     val waves = HashMap<Int,ArrayList<Pair<Int, WaveData>>>()
 
     lateinit var yml: YamlConfiguration
 
-    fun callFloor() {
-        DungeonTower.createFloorNow = true
+    var generated = false
+
+    fun checkClear(): Boolean {
+        ClearTaskEnum.values().forEach {
+            if (!checkClear(it))return false
+        }
+        return true
+    }
+
+    fun checkClear(task: ClearTaskEnum): Boolean {
+        val find = clearTask.find { it.type == task }?:return true
+        when(find.condition){
+            ClearCondition.CLEAR_ALL -> {
+                return find.clear && parallelFloors.none { !it.checkClear(task) } && if (parallelFloor) parent.checkClear(task) else true
+            }
+            ClearCondition.CLEAR_PARENT -> {
+                return parallelFloor && parent.checkClear(task)
+            }
+            ClearCondition.CLEAR_PARENT_AND_SELF -> {
+                return parallelFloor && parent.checkClear(task) && find.clear
+            }
+            ClearCondition.CLEAR_PARALLEL -> {
+                return parallelFloors.none { !it.checkClear(task) }
+            }
+            ClearCondition.CLEAR_PARALLEL_AND_SELF -> {
+                return find.clear && parallelFloors.none { !it.checkClear(task) }
+            }
+        }
+    }
+
+    fun randomFloor(): FloorData {
+        val random = kotlin.random.Random.nextInt(1..1000000)
+        var preventRandom = 0
+        for (floor in subFloors){
+            if (preventRandom < random && floor.first + preventRandom > random){
+                return floor.second.newInstance()
+            }
+            preventRandom = floor.first
+        }
+        throw NullPointerException("Couldn't find floor. Maybe sum percentage is not 1000000.")
+    }
+
+    inner class SpawnerRunnable(val data: SpawnerData, val location: Location, val uuid: UUID) : BukkitRunnable() {
+
+        val sEvent = SEvent(DungeonTower.plugin)
+
+        init {
+            sEvent.register(EntityDeathEvent::class.java) { e ->
+                if (e.entity.persistentDataContainer[NamespacedKey(DungeonTower.plugin,"dmob"), PersistentDataType.STRING] != uuid.toString())return@register
+                data.kill++
+                if (data.kill <= data.navigateKill){
+                    val ksFind = clearTask.find { it.type == ClearTaskEnum.KILL_SPAWNER_MOBS }
+                    if (ksFind != null) ksFind.count += 1
+                }
+                if (data.kill >= data.navigateKill){
+                    spawnerClearTasks[uuid] = true
+                    if (spawnerClearTasks.values.none { !it }){
+                        clearTask.filter { it.type == ClearTaskEnum.KILL_SPAWNER_MOBS }.forEach {
+                            it.clear = true
+                        }
+                    }
+                }
+            }
+        }
+
+        var coolTime = data.coolTime
+        override fun run() {
+            if (data.count >= data.max){
+                cancel()
+                return
+            }
+            coolTime--
+            if (coolTime > 0)return
+            if (location.getNearbyPlayers(data.activateRange.toDouble())
+                    .none { it.gameMode == GameMode.SURVIVAL || it.gameMode == GameMode.ADVENTURE })return
+            val spawnLoc = location.clone().add(
+                (-data.radius..data.radius).random().toDouble(),
+                data.yOffSet,
+                (-data.radius..data.radius).random().toDouble()
+            )
+            val mob = data.randomMob().spawn(BukkitAdapter.adapt(spawnLoc),data.level)
+            location.world.playSound(location, Sound.BLOCK_END_PORTAL_FRAME_FILL, 1f, 1f)
+            location.world.spawnParticle(Particle.FLAME, location, 15)
+            mob?.entity?.dataContainer?.set(
+                NamespacedKey(DungeonTower.plugin,"dmob"),
+                PersistentDataType.STRING,
+                uuid.toString())
+            data.count++
+            if (data.count >= data.max){
+                val portal = location.block.blockData as EndPortalFrame
+                portal.setEye(false)
+                location.block.blockData = portal
+            }
+        }
+
+        override fun cancel() {
+            Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
+                DungeonTower.dungeonWorld.entities.filter { it.persistentDataContainer.get(
+                    NamespacedKey(DungeonTower.plugin, "dmob"),
+                    PersistentDataType.STRING) == uuid.toString() }.forEach {
+                    it.remove()
+                }
+            })
+            super.cancel()
+        }
+    }
+
+    fun getAllTask(): ArrayList<ClearTask> {
+        val list = ArrayList<ClearTask>()
+        list.addAll(clearTask)
+        parallelFloors.forEach {
+            list.addAll(it.getAllTask())
+        }
+        return list
+    }
+
+    fun generateFloor(location: Location, direction: Double) {
         preventFloorStairs.clear()
         nextFloorStairs.clear()
         spawnerClearTasks.clear()
@@ -89,56 +221,85 @@ class FloorData: Cloneable {
         val highY = if (lowY == startLoc.blockY) endLoc.blockY else startLoc.blockY
         val highZ = if (lowZ == startLoc.blockZ) endLoc.blockZ else startLoc.blockZ
 
-        dungeonStartLoc = Location(DungeonTower.dungeonWorld, DungeonTower.nowX.toDouble(), DungeonTower.y.toDouble(), 0.0)
+        dungeonStartLoc = location.clone()
+        dungeonEndLoc = location.clone().add(
+            (highX- lowX) * cos(direction) - (highZ - lowZ) * sin(direction),
+            (highY - lowY).toDouble(),
+            (highX- lowX) * sin(direction) + (highZ - lowZ) * cos(direction)
+        )
 
         val region = CuboidRegion(
             BukkitWorld(DungeonTower.floorWorld),
-            BlockVector3.at(lowX,lowY,lowZ),
-            BlockVector3.at(highX,highY,highZ))
+            BlockVector3.at(lowX, lowY, lowZ),
+            BlockVector3.at(highX, highY, highZ)
+        )
         val clipboard = BlockArrayClipboard(region)
-        val forwardExtentCopy = ForwardExtentCopy(BukkitWorld(DungeonTower.floorWorld), region, clipboard, region.minimumPoint)
+        val forwardExtentCopy =
+            ForwardExtentCopy(BukkitWorld(DungeonTower.floorWorld), region, clipboard, region.minimumPoint)
         Operations.complete(forwardExtentCopy)
+
+        if (parallelFloor) {
+            val rad = Math.toRadians(direction)
+            DungeonTower.nowX += abs(cos(rad) * (highX - lowX)).toInt()
+            if (DungeonTower.xLimit <= DungeonTower.nowX) {
+                DungeonTower.nowX = 0
+            }
+        } else {
+            val rad = Math.toRadians(direction)
+            DungeonTower.nowX += abs(cos(rad) * (highX - lowX)).toInt() + DungeonTower.dungeonXSpace
+            if (DungeonTower.xLimit <= DungeonTower.nowX) {
+                DungeonTower.nowX = 0
+            }
+        }
 
         WorldEdit.getInstance().newEditSession(BukkitWorld(DungeonTower.dungeonWorld)).use {
             val operation = ClipboardHolder(clipboard)
+                .apply {
+                    transform = this.transform.combine(AffineTransform().apply {
+                        rotateY(direction)
+                    })
+                }
                 .createPaste(it)
-                .to(BlockVector3.at(DungeonTower.nowX,DungeonTower.y,0))
+                .to(BlockVector3.at(location.blockX, location.blockY, location.blockZ))
                 .ignoreAirBlocks(true)
                 .build()
             Operations.complete(operation)
         }
 
-        DungeonTower.nowX += abs(highX - lowX) + DungeonTower.dungeonXSpace
-        if (DungeonTower.xLimit <= DungeonTower.nowX){
-            DungeonTower.nowX = 0
-        }
+        val dungeonX = dungeonStartLoc!!.blockX..dungeonEndLoc!!.blockX
+        val dungeonY = dungeonStartLoc!!.blockY..dungeonEndLoc!!.blockY
+        val dungeonZ = dungeonStartLoc!!.blockZ..dungeonEndLoc!!.blockZ
 
-        for ((indexX, x) in (lowX..highX).withIndex()){
-            for ((indexY, y) in (lowY..highY).withIndex()){
-                for ((indexZ, z) in (lowZ..highZ).withIndex()){
-                    val block = DungeonTower.floorWorld.getBlockAt(x,y,z)
-                    val placeLoc = dungeonStartLoc!!.clone().add(indexX.toDouble(),indexY.toDouble(),indexZ.toDouble())
+        for ((indexX, x) in (dungeonX).withIndex()) {
+            for ((indexY, y) in (dungeonY).withIndex()) {
+                for ((indexZ, z) in (dungeonZ).withIndex()) {
+                    val block = DungeonTower.floorWorld.getBlockAt(x, y, z)
+                    val placeLoc =
+                        dungeonStartLoc!!.clone().add(indexX.toDouble(), indexY.toDouble(), indexZ.toDouble())
 
-                    when(block.type){
+                    when (block.type) {
 
-                        Material.OAK_SIGN->{
-                            val data = DungeonTower.floorWorld.getBlockState(x,y,z) as Sign
-                            when(data.getLine(0)){
-                                "loot"->{
-                                    val loot = (DungeonTower.lootData[data.getLine(1)]?:continue).clone()
+                        Material.OAK_SIGN -> {
+                            val data = DungeonTower.floorWorld.getBlockState(x, y, z) as Sign
+                            when (data.getLine(0)) {
+                                "loot" -> {
+                                    val loot = (DungeonTower.lootData[data.getLine(1)] ?: continue).clone()
                                     placeLoc.block.type = Material.CHEST
                                     val chest = placeLoc.block.state as Chest
                                     chest.customName(Component.text(loot.displayName))
                                     chest.setLock("§c§l${Random().nextDouble(10000.0)}")
                                     chest.update()
-                                    loot.fillInventory(chest.inventory, Random(),
-                                        LootContext.Builder(chest.location).build())
+                                    loot.fillInventory(
+                                        chest.inventory, Random(),
+                                        LootContext.Builder(chest.location).build()
+                                    )
                                     val blockData = chest.blockData as Directional
                                     blockData.facing = (data.blockData as org.bukkit.block.data.type.Sign).rotation
                                     chest.blockData = blockData
                                 }
-                                "spawner"->{
-                                    val spawner = (DungeonTower.spawnerData[data.getLine(1)]?:continue).clone()
+                                "spawner" -> {
+                                    val spawner =
+                                        (DungeonTower.spawnerData[data.getLine(1)] ?: continue).clone()
                                     val locSave = placeLoc.clone()
                                     locSave.block.type = Material.END_PORTAL_FRAME
                                     val portal = locSave.block.blockData as EndPortalFrame
@@ -150,82 +311,56 @@ class FloorData: Cloneable {
                                     val find = clearTask.find { it.type == ClearTaskEnum.KILL_SPAWNER_MOBS }
                                     if (find != null) find.need += spawner.navigateKill
                                     spawners.add(
-                                        object : BukkitRunnable() {
-                                            val sEvent = SEvent(DungeonTower.plugin)
-                                            init {
-                                                sEvent.register(EntityDeathEvent::class.java) { e ->
-                                                    if (e.entity.persistentDataContainer[NamespacedKey(DungeonTower.plugin,"dmob"), PersistentDataType.STRING] != randUUID.toString())return@register
-                                                    spawner.kill++
-                                                    if (spawner.kill <= spawner.navigateKill){
-                                                        val ksFind = clearTask.find { it.type == ClearTaskEnum.KILL_SPAWNER_MOBS }
-                                                        if (ksFind != null) ksFind.count += 1
-                                                    }
-                                                    if (spawner.kill >= spawner.navigateKill){
-                                                        spawnerClearTasks[randUUID] = true
-                                                        if (spawnerClearTasks.values.none { !it }){
-                                                            clearTask.filter { it.type == ClearTaskEnum.KILL_SPAWNER_MOBS }.forEach {
-                                                                it.clear = true
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            override fun cancel() {
-                                                sEvent.unregisterAll()
-                                                Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
-                                                    DungeonTower.dungeonWorld.entities.filter { it.persistentDataContainer.get(
-                                                        NamespacedKey(DungeonTower.plugin, "dmob"),
-                                                        PersistentDataType.STRING) == randUUID.toString() }.forEach {
-                                                        it.remove()
-                                                    }
-                                                })
-                                                super.cancel()
-                                            }
-
-                                            override fun run() {
-                                                if (spawner.count >= spawner.max)return
-                                                if (locSave.getNearbyPlayers(spawner.activateRange.toDouble())
-                                                    .none { it.gameMode == GameMode.SURVIVAL || it.gameMode == GameMode.ADVENTURE })return
-                                                val spawnLoc = locSave.clone().add(
-                                                    (-spawner.radius..spawner.radius).random().toDouble(),
-                                                    spawner.yOffSet,
-                                                    (-spawner.radius..spawner.radius).random().toDouble()
-                                                )
-                                                val mob = spawner.randomMob().spawn(BukkitAdapter.adapt(spawnLoc),spawner.level)
-                                                locSave.world.playSound(locSave, Sound.BLOCK_END_PORTAL_FRAME_FILL, 1f, 1f)
-                                                locSave.world.spawnParticle(Particle.FLAME, locSave, 15)
-                                                mob?.entity?.dataContainer?.set(
-                                                    NamespacedKey(DungeonTower.plugin,"dmob"),
-                                                    PersistentDataType.STRING,
-                                                    randUUID.toString())
-                                                spawner.count++
-                                                if (spawner.count >= spawner.max){
-                                                    portal.setEye(false)
-                                                    locSave.block.blockData = portal
-                                                }
-
-                                            }
-                                        }.runTaskTimer(DungeonTower.plugin,spawner.coolTime.toLong(),spawner.coolTime.toLong())
+                                        SpawnerRunnable(spawner, locSave, randUUID)
                                     )
                                 }
-
+                                "floor" -> {
+                                    val floor = (DungeonTower.floorData[data.getLine(1)] ?: continue).newInstance()
+                                    val chance = data.getLine(2).toIntOrNull() ?: 1000000
+                                    if (Random().nextInt(1000000) > chance) continue
+                                    val rotate = data.getLine(3).toDoubleOrNull() ?: 0.0
+                                    floor.parent = this
+                                    floor.parallelFloor = true
+                                    parallelFloors.add(floor)
+                                    floor.generateFloor(placeLoc, rotate)
+                                }
+                                else -> {}
                             }
-
-                        }
-                        Material.WARPED_STAIRS->{
-                            nextFloorStairs.add(placeLoc.clone().add(0.0,1.0,0.0))
-                            lastFloor = false
-                        }
-                        Material.CRIMSON_STAIRS->{
-                            preventFloorStairs.add(placeLoc.clone().add(0.0,1.0,0.0).setDirection((block.blockData as Stairs).facing.direction))
                         }
 
-                        else->{}
+                        Material.WARPED_STAIRS -> {
+                            nextFloorStairs.add(placeLoc.clone().add(0.0, 1.0, 0.0))
+                        }
+
+                        Material.CRIMSON_STAIRS -> {
+                            preventFloorStairs.add(
+                                placeLoc.clone().add(0.0, 1.0, 0.0).setDirection((block.blockData as Stairs).facing.direction)
+                            )
+                        }
+
+                        else -> {}
                     }
                 }
             }
         }
-        DungeonTower.createFloorNow = false
+        generated = true
+    }
+
+    fun generateFloor() {
+        generateFloor(
+            Location(
+                DungeonTower.dungeonWorld,
+                DungeonTower.nowX.toDouble(),
+                DungeonTower.y.toDouble(),
+                0.0
+            ), 0.0
+        )
+    }
+
+    fun activate() {
+        spawners.forEach {
+            it.runTaskTimer(DungeonTower.plugin, 1, 1)
+        }
         return
     }
 
@@ -306,6 +441,11 @@ class FloorData: Cloneable {
                 task.clearScoreboardName = split.last()
                 clearTask.add(task)
             }
+            yml.getStringList("subFloors").forEach {
+                val split = it.split(",")
+                val floorData = (DungeonTower.floorData[split[1]]?:throw NullPointerException("Failed load FloorData to ${split[1]} in ${internalName}.")).newInstance()
+                subFloors.add(Pair(split[0].toInt(),floorData))
+            }
         }
 
         return data
@@ -334,6 +474,11 @@ class FloorData: Cloneable {
                     task.scoreboardName = split.reversed()[1]
                     task.clearScoreboardName = split.last()
                     clearTask.add(task)
+                }
+                yml.getStringList("subFloors").forEach {
+                    val split = it.split(",")
+                    val floorData = (DungeonTower.floorData[split[1]]?:throw NullPointerException("Failed load FloorData to ${split[1]} in ${file.nameWithoutExtension}.")).newInstance()
+                    subFloors.add(Pair(split[0].toInt(),floorData))
                 }
             }
 

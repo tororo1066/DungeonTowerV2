@@ -16,7 +16,6 @@ import tororo1066.dungeontower.create.CreateSpawner
 import tororo1066.dungeontower.data.*
 import tororo1066.dungeontower.inventory.RuleInventory
 import tororo1066.dungeontower.skilltree.ActionBarBaseGUI
-import tororo1066.dungeontower.skilltree.TitleGUI
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.annotation.SCommandBody
 import tororo1066.tororopluginapi.otherClass.StrExcludeFileIllegalCharacter
@@ -40,6 +39,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
         setCommandNoFoundEvent {
             showHelp(it.sender,it.label)
         }
+        registerDebugCommand("dungeon.user")
     }
 
     private fun CommandSender.checkIllegal(string: String): Boolean {
@@ -240,16 +240,14 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
     val partyList = command().addArg(SCommandArg("parties")).setNormalExecutor {
         DungeonTower.partiesData.values.filterNotNull().forEach { party ->
             party.players.values.forEach { userData ->
-                it.sender.sendMessage("§d${if (party.parent == userData.uuid) "パーティリーダー " else ""}§a${userData.mcid}")
+                it.sender.sendMessage(SStr("§d${if (party.parent == userData.uuid) "パーティリーダー " else ""}§a${userData.mcid}")
+                    .commandText("/minecraft:tp ${userData.mcid}")
+                    .hoverText("§aクリックでテレポート"))
             }
             it.sender.sendMessage("§dプレイ中: ${party.nowTask != null}")
             if (party.nowTask != null){
                 it.sender.sendMessage("§dダンジョン: §r${party.nowTask!!.tower.name}")
-                it.sender.sendMessage(SStr(
-                        "§d位置: ${party.nowTask!!.nowFloor.startLoc.toLocString(LocType.BLOCK_SPACE)}"
-                )
-                        .commandText("/minecraft:tp ${party.nowTask!!.nowFloor.startLoc.toLocString(LocType.BLOCK_SPACE)}")
-                        .hoverText("§aクリックでテレポート"))
+                it.sender.sendMessage("§dフロア: §r${party.nowTask!!.nowFloor.internalName}§7(${party.nowTask!!.nowFloorNum}階)")
             }
             it.sender.sendMessage("§6====================")
         }
@@ -505,19 +503,6 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
             state.setLine(1,it.args[2])
             state.update(true)
         }
-
-    lateinit var titleGUI: TitleGUI
-
-    @SCommandBody("dungeon.op")
-    val testGUI = command().addArg(SCommandArg("test")).setPlayerExecutor {
-        titleGUI = TitleGUI(it.sender)
-        titleGUI.show()
-    }
-
-    @SCommandBody("dungeon.op")
-    val testGUI2 = command().addArg(SCommandArg("test2")).setPlayerExecutor {
-        titleGUI.stop()
-    }
 
     lateinit var actionBarBaseGUI: ActionBarBaseGUI
 

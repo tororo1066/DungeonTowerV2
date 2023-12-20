@@ -12,6 +12,7 @@ import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.player.PlayerItemConsumeEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
+import org.bukkit.event.player.PlayerVelocityEvent
 import org.bukkit.scoreboard.Criteria
 import org.bukkit.scoreboard.DisplaySlot
 import tororo1066.dungeontower.DungeonTower
@@ -24,25 +25,37 @@ import tororo1066.tororopluginapi.utils.DateType
 import tororo1066.tororopluginapi.utils.toJPNDateStr
 import tororo1066.tororopluginapi.utils.toPlayer
 import java.util.*
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 
 class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(party, tower) {
 
-    private var nowFloorNum = 1
+    var nowFloorNum = 1
     lateinit var nowFloor: FloorData
-    private val nextFloorPlayers = ArrayList<UUID>()
+    lateinit var nextFloor: FloorData
+    private val nextFloorPlayers = HashMap<FloorData, ArrayList<UUID>>()
+    private val goalPlayers = ArrayList<UUID>()
     private val moveLockPlayers = ArrayList<UUID>()
     private var scoreboard = Bukkit.getScoreboardManager().newScoreboard
 
     private var end = false
     private var unlockedChest = false
+    private var createFloorNow = false
 
-    override fun end(){
+    override fun onEnd(){
         nowFloor.removeFloor()
         end = true
         sEvent.unregisterAll()
         scoreboard.getObjective("DungeonTower")?.displaySlot = null
         scoreboard.getObjective("DungeonTower")?.unregister()
         interrupt()
+    }
+
+    private fun generateNextFloor(){
+        if (tower.isExistFloor(nowFloorNum + 1)){
+            nextFloor = tower.randomFloor(nowFloorNum + 1)
+            nextFloor.generateFloor()
+        }
     }
 
     override fun run() {
@@ -56,7 +69,10 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
         while (DungeonTower.createFloorNow){
             sleep(1)
         }
-        runTask { nowFloor.callFloor() }
+        runTask {
+            nowFloor.generateFloor()
+            nowFloor.activate()
+        }
         runTask { party.smokeStan(60) }
         runTask { party.teleport(nowFloor.preventFloorStairs.random().add(0.0,1.0,0.0)) }
         callCommand(nowFloor)
@@ -70,7 +86,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
             if (!party.players.containsKey(e.player.uniqueId))return@register
             val data = party.players[e.player.uniqueId]!!
             if (!data.isAlive)return@register
-            nextFloorPlayers.remove(e.player.uniqueId)
+            nextFloorPlayers.entries.removeIf { it.value.contains(e.player.uniqueId) }
             clearDungeonItems(e.player)
             data.isAlive = false
             party.broadCast(SStr("&c&l${e.player.name}が死亡した..."))
@@ -98,18 +114,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
                     moveLockPlayers.add(uuid)
                 }
                 TowerLogDB.annihilationDungeon(party, tower.internalName)
-                Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
-                    party.teleport(DungeonTower.lobbyLocation)
-                    party.players.keys.forEach { uuid ->
-                        if (uuid.toPlayer()?.gameMode == GameMode.SPECTATOR){
-                            uuid.toPlayer()?.spectatorTarget = null
-                            uuid.toPlayer()?.gameMode = GameMode.SURVIVAL
-                        }
-                        DungeonTower.partiesData.remove(uuid)
-                        DungeonTower.playNow.remove(uuid)
-                    }
-                    end()
-                },60)
+                end()
             }
         }
         sEvent.register(PlayerStopSpectatingEntityEvent::class.java){ e ->
@@ -118,7 +123,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
         }
         sEvent.register(PlayerQuitEvent::class.java){ e ->
             if (!party.players.containsKey(e.player.uniqueId))return@register
-            nextFloorPlayers.remove(e.player.uniqueId)
+            nextFloorPlayers.entries.removeIf { it.value.contains(e.player.uniqueId) }
             clearDungeonItems(e.player)
             if (party.parent == e.player.uniqueId){
                 val randomParent = party.players.entries.filter { it.key != e.player.uniqueId }.randomOrNull()?.key
@@ -138,18 +143,14 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
 
             if (party.alivePlayers.isEmpty()){
                 party.broadCast(SStr("&c生きているプレイヤーが退出したため負けになりました"))
-                party.teleport(DungeonTower.lobbyLocation)
-                party.players.keys.forEach { uuid ->
-                    if (uuid.toPlayer()?.gameMode == GameMode.SPECTATOR){
-                        uuid.toPlayer()?.spectatorTarget = null
-                        uuid.toPlayer()?.gameMode = GameMode.SURVIVAL
-                    }
-                    DungeonTower.partiesData.remove(uuid)
-                    DungeonTower.playNow.remove(uuid)
-                }
                 TowerLogDB.quitDisbandDungeon(party, tower.internalName)
-                end()
+                end(delay = 0)
                 return@register
+            }
+        }
+        sEvent.register(PlayerVelocityEvent::class.java){ e ->
+            if (moveLockPlayers.contains(e.player.uniqueId)){
+                e.isCancelled = true
             }
         }
         sEvent.register(PlayerMoveEvent::class.java){ e ->
@@ -159,37 +160,51 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
             }
             if (e.player.gameMode == GameMode.SPECTATOR)return@register
             if (!party.players.containsKey(e.player.uniqueId))return@register
-            nextFloorPlayers.remove(e.player.uniqueId)
+            nextFloorPlayers.entries.removeIf { it.value.contains(e.player.uniqueId) }
             when(e.to.clone().subtract(0.0,1.0,0.0).block.type){
                 Material.WARPED_STAIRS->{
-                    if (nowFloor.clearTask.any { !it.clear })return@register
-                    nextFloorPlayers.add(e.player.uniqueId)
-                    if (party.alivePlayers.size / 2 < nextFloorPlayers.size){
-                        nowFloorNum++
-                        val preventFloor = nowFloor
-                        nowFloor = tower.randomFloor(nowFloorNum)
-                        while (DungeonTower.createFloorNow){
-                            sleep(1)
-                        }
-                        nowFloor.callFloor()
-                        party.smokeStan(60)
-                        party.players.keys.forEach {
+                    val floor = getInFloor(nowFloor, e.player)?:return@register
+                    if (!floor.checkClear())return@register
+                    if (nextFloorPlayers.containsKey(floor)){
+                        nextFloorPlayers[floor]!!.add(e.player.uniqueId)
+                    } else {
+                        nextFloorPlayers[floor] = arrayListOf(e.player.uniqueId)
+                    }
+                    if (party.alivePlayers.size / 2 < nextFloorPlayers[floor]!!.size && !createFloorNow
+                        && floor.subFloors.isNotEmpty()){
+                        createFloorNow = true
+                        party.alivePlayers.keys.forEach {
                             moveLockPlayers.add(it)
                         }
-                        unlockedChest = false
-                        party.teleport(nowFloor.preventFloorStairs.random().add(0.0,1.1,0.0))
-                        callCommand(nowFloor)
-                        party.players.keys.forEach {
-                            moveLockPlayers.remove(it)
-                        }
-                        preventFloor.removeFloor()
+                        party.broadCast(SStr("&7転移中..."))//메시지
+                        Bukkit.getScheduler().runTaskAsynchronously(DungeonTower.plugin, Runnable {
+                            nowFloorNum++
+                            val preventFloor = nowFloor
+                            nowFloor = floor.randomFloor()
+                            while (DungeonTower.createFloorNow){
+                                sleep(1)
+                            }
+                            Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
+                                nowFloor.generateFloor()
+                                nowFloor.activate()
+                                party.smokeStan(60)
+                                unlockedChest = false
+                                party.teleport(nowFloor.preventFloorStairs.random().add(0.0,1.1,0.0))
+                                callCommand(nowFloor)
+                                preventFloor.removeFloor()
+                                party.alivePlayers.keys.forEach {
+                                    moveLockPlayers.remove(it)
+                                }
+                                createFloorNow = false
+                            })
+                        })
                     }
                 }
                 Material.DIAMOND_BLOCK->{
-                    if (nowFloor.clearTask.any { !it.clear })return@register
-//                    if (!nowFloor.lastFloor)return@register//どこでもクリアできるっていうのも面白いかもしれない
-                    nextFloorPlayers.add(e.player.uniqueId)
-                    if (party.alivePlayers.size / 2 < nextFloorPlayers.size){
+                    val floor = getInFloor(nowFloor, e.player)?:return@register
+                    if (!floor.checkClear())return@register
+                    goalPlayers.add(e.player.uniqueId)
+                    if (party.alivePlayers.size / 2 < goalPlayers.size){
                         TowerLogDB.clearDungeon(party, tower.internalName)
                         party.broadCast(SStr("&a&lクリア！"))
                         party.players.keys.forEach {
@@ -199,16 +214,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
                             }
                             dungeonItemToItem(it.toPlayer()?:return@forEach)
                         }
-                        party.teleport(DungeonTower.lobbyLocation)
-                        party.players.keys.forEach { uuid ->
-                            if (uuid.toPlayer()?.gameMode == GameMode.SPECTATOR){
-                                uuid.toPlayer()?.spectatorTarget = null
-                                uuid.toPlayer()?.gameMode = GameMode.SURVIVAL
-                            }
-                            DungeonTower.partiesData.remove(uuid)
-                            DungeonTower.playNow.remove(uuid)
-                        }
-                        end()
+                        end(delay = 0)
                     }
                 }
                 else->{}
@@ -258,26 +264,16 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
                 obj.getScore("§6タスク").score = 0
                 var scoreInt = -1
                 nowFloor.clearTask.forEach {
-                    val replace = " " + (if (it.clear) it.clearScoreboardName else it.scoreboardName)
-                        .replace("&", "§")
-                        .replace("<and>", "&")
-                        .replace("<spawnerNavigateNeed>", nowFloor.clearTask
-                            .filter { fil -> fil.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }
-                            .sumOf { map -> map.need }.toString()
-                        )
-                        .replace("<spawnerNavigateCount>", nowFloor.clearTask
-                            .filter { fil -> fil.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }
-                            .sumOf { map -> map.count }.toString()
-                        )
-                        .replace("<gimmickNeed>", nowFloor.clearTask
-                            .find { find -> find.type == FloorData.ClearTaskEnum.ENTER_COMMAND }
-                            ?.need.toString())
-                        .replace("<gimmickCount>", nowFloor.clearTask
-                            .find { find -> find.type == FloorData.ClearTaskEnum.ENTER_COMMAND }
-                            ?.count.toString())
 
-                    obj.getScore(replace).score = scoreInt
+                    obj.getScore(formatTask(nowFloor, it)).score = scoreInt
                     scoreInt--
+                }
+
+                nowFloor.parallelFloors.forEach { floor ->
+                    floor.clearTask.forEach second@ { task ->
+                        if (task.scoreboardName.isBlank()) return@second
+                        obj.getScore(formatTask(floor, task)).score = scoreInt
+                    }
                 }
 
                 obj.getScore(" ").score = scoreInt
@@ -294,6 +290,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
                 scoreInt--
 
                 party.alivePlayers.values.filter { it.uuid.toPlayer() != null }
+                    .sortedBy { it.uuid.toPlayer()?.health }
                     .take(4).forEach {
                         val health = "§c♥§a${it.uuid.toPlayer()!!.health.toInt()}"
                         val builder = StringBuilder()
@@ -325,18 +322,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
                 }
                 party.broadCast(SStr("&c&l時間切れ..."))
                 TowerLogDB.timeOutDungeon(party, tower.internalName)
-                Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
-                    party.teleport(DungeonTower.lobbyLocation)
-                    party.players.keys.forEach { uuid ->
-                        if (uuid.toPlayer()?.gameMode == GameMode.SPECTATOR){
-                            uuid.toPlayer()?.spectatorTarget = null
-                            uuid.toPlayer()?.gameMode = GameMode.SURVIVAL
-                        }
-                        DungeonTower.partiesData.remove(uuid)
-                        DungeonTower.playNow.remove(uuid)
-                    }
-                    end()
-                },60)
+                end()
             }
 
             try {

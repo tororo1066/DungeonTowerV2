@@ -2,6 +2,7 @@ package tororo1066.dungeontower.task
 
 import com.google.common.io.ByteStreams
 import org.bukkit.Bukkit
+import org.bukkit.GameMode
 import org.bukkit.NamespacedKey
 import org.bukkit.entity.Player
 import org.bukkit.event.entity.PlayerDeathEvent
@@ -12,6 +13,7 @@ import tororo1066.dungeontower.data.PartyData
 import tororo1066.dungeontower.data.TowerData
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.sEvent.SEvent
+import tororo1066.tororopluginapi.utils.toPlayer
 
 abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): Thread() {
 
@@ -58,6 +60,12 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         })
 
         lock.lock()
+    }
+
+    protected fun asyncRunTask(unit: ()->Unit) {
+        Bukkit.getScheduler().runTaskAsynchronously(DungeonTower.plugin, Runnable {
+            unit.invoke()
+        })
     }
 
     protected fun clearDungeonItems(p: Player){
@@ -111,11 +119,68 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         })
     }
 
-    protected open fun end(){
-
+    protected fun formatTask(floor: FloorData, task: FloorData.ClearTask): String {
+        val replace = " " + (if (task.clear) task.clearScoreboardName else task.scoreboardName)
+            .replace("&", "§")
+            .replace("<and>", "&")
+            .replace("<spawnerNavigateNeed>", floor.getAllTask()
+                .filter { fil -> fil.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }
+                .sumOf { map -> map.need }.toString()
+            )
+            .replace("<spawnerNavigateCount>", floor.getAllTask()
+                .filter { fil -> fil.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }
+                .sumOf { map -> map.count }.toString()
+            )
+            .replace("<gimmickNeed>", floor.getAllTask()
+                .find { find -> find.type == FloorData.ClearTaskEnum.ENTER_COMMAND }
+                ?.need.toString())
+            .replace("<gimmickCount>", floor.getAllTask()
+                .find { find -> find.type == FloorData.ClearTaskEnum.ENTER_COMMAND }
+                ?.count.toString())
+        return replace
     }
 
-    protected open fun onDeath(e: PlayerDeathEvent) {
+    protected fun end(delay: Long = 60) {
+        Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
+            party.players.keys.forEach { uuid ->
+                val p = uuid.toPlayer()
+                if (p?.gameMode == GameMode.SPECTATOR){
+                    p.spectatorTarget = null
+                    p.gameMode = GameMode.SURVIVAL
+                    p.teleport(DungeonTower.lobbyLocation)
+                }
+                DungeonTower.partiesData.remove(uuid)
+                DungeonTower.playNow.remove(uuid)
+            }
+            onEnd()
+        },delay)
+    }
+
+    protected fun getInFloor(mainFloor: FloorData, p: Player): FloorData? {
+        fun check(floor: FloorData): Boolean {
+            val startLoc = floor.dungeonStartLoc?:return false
+            val endLoc = floor.dungeonEndLoc?:return false
+            val x = startLoc.blockX..endLoc.blockX
+            val y = startLoc.blockY..endLoc.blockY
+            val z = startLoc.blockZ..endLoc.blockZ
+            val world = startLoc.world
+            return world.name == p.world.name && x.contains(p.location.blockX) && y.contains(p.location.blockY) && z.contains(p.location.blockZ)
+        }
+        if (check(mainFloor)){
+            return mainFloor
+        }
+
+        mainFloor.parallelFloors.forEach { parallel ->
+            if (check(parallel)){
+                return parallel
+            }
+            getInFloor(parallel,p)?.let { return it }
+        }
+
+        return null
+    }
+
+    protected open fun onEnd(){
 
     }
 

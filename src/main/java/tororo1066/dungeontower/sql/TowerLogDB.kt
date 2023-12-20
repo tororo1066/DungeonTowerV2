@@ -86,7 +86,7 @@ class TowerLogDB {
                 set(Calendar.MILLISECOND, 0)
             }.time
             return if (database.isMongo){
-                val condition = SDBCondition().equal("actions.action", "ENTER_DUNGEON")
+                val condition = SDBCondition().equal("actions.action", "CLEAR_DUNGEON")
                     .and(SDBCondition().equal("users.ip",ip).or(SDBCondition().equal("users.uuid",uuid)))
                     .and(SDBCondition().orHigher("actions.date", time))
                 if (dungeons != null){
@@ -94,7 +94,7 @@ class TowerLogDB {
                 }
                 database.asyncSelect("tower_log", condition).get().count()
             } else {
-                val condition = SDBCondition().equal("action", "ENTER_DUNGEON")
+                val condition = SDBCondition().equal("action", "CLEAR_DUNGEON")
                     .and(SDBCondition().like("ip", ip).or(SDBCondition().like("uuid", uuid)))
                     .and(SDBCondition().orHigher("date", time.toSQLVariable(SDBVariable.DateTime)))
                 if (dungeons != null){
