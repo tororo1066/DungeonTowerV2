@@ -231,24 +231,24 @@ class FloorData: Cloneable {
 
         val dungeonStartLoc = location.clone()
         val dungeonEndLoc = location.clone().add(
-            (highX- lowX) * cos(modifiedDirection) - (highZ - lowZ) * sin(modifiedDirection),
+            (highX- lowX) * cos(modifiedDirection) + (highZ - lowZ) * sin(modifiedDirection),
             (highY - lowY).toDouble(),
-            (highX- lowX) * sin(modifiedDirection) + (highZ - lowZ) * cos(modifiedDirection)
+            (highZ- lowZ) * cos(modifiedDirection) - (highX - lowX) * sin(modifiedDirection)
         )
 //        Bukkit.broadcastMessage("dungeonStartLoc: ${dungeonStartLoc.toLocString(LocType.WORLD_BLOCK_COMMA)}")
 //        Bukkit.broadcastMessage("dungeonEndLoc: ${dungeonEndLoc.toLocString(LocType.WORLD_BLOCK_COMMA)}")
 
-//        if (dungeonStartLoc.blockX > dungeonEndLoc.blockX){
-//            val temp = dungeonStartLoc.blockX
-//            dungeonStartLoc.add((dungeonStartLoc.blockX - dungeonEndLoc.blockX).toDouble(),0.0,0.0)
-//            dungeonEndLoc.add((temp - dungeonEndLoc.blockX).toDouble(),0.0,0.0)
-//        }
-//
-//        if (dungeonStartLoc.blockZ > dungeonEndLoc.blockZ){
-//            val temp = dungeonStartLoc.blockZ
-//            dungeonStartLoc.add(0.0,0.0,(dungeonStartLoc.blockZ - dungeonEndLoc.blockZ).toDouble())
-//            dungeonEndLoc.add(0.0,0.0,(temp - dungeonEndLoc.blockZ).toDouble())
-//        }
+        if (dungeonStartLoc.blockX > dungeonEndLoc.blockX){
+            val temp = dungeonStartLoc.blockX
+            dungeonStartLoc.add((dungeonStartLoc.blockX - dungeonEndLoc.blockX).toDouble(),0.0,0.0)
+            dungeonEndLoc.add((temp - dungeonEndLoc.blockX).toDouble(),0.0,0.0)
+        }
+
+        if (dungeonStartLoc.blockZ > dungeonEndLoc.blockZ){
+            val temp = dungeonStartLoc.blockZ
+            dungeonStartLoc.add(0.0,0.0,(dungeonStartLoc.blockZ - dungeonEndLoc.blockZ).toDouble())
+            dungeonEndLoc.add(0.0,0.0,(temp - dungeonEndLoc.blockZ).toDouble())
+        }
 
         val buildLocation = dungeonStartLoc.clone()
         val originLocation = (parallelFloorOrigin?:startLoc).clone()
@@ -326,9 +326,9 @@ class FloorData: Cloneable {
                     val placeLoc =
                         dungeonStartLoc.clone().add(indexX.toDouble() * xSign, indexY.toDouble() * ySign, indexZ.toDouble() * zSign)
 
-                    if (parallelFloor){
-                        placeLoc.block.type = Material.EMERALD_BLOCK
-                    }
+//                    if (parallelFloor && block.type == Material.AIR){
+//                        placeLoc.block.type = Material.EMERALD_BLOCK
+//                    }
                     when (block.type) {
 
                         Material.OAK_SIGN -> {
@@ -452,20 +452,16 @@ class FloorData: Cloneable {
         }
         spawners.clear()
 
-        val lowX = min(startLoc.blockX, endLoc.blockX)
-        val lowY = min(startLoc.blockY, endLoc.blockY)
-        val lowZ = min(startLoc.blockZ, endLoc.blockZ)
-        val highX = if (lowX == startLoc.blockX) endLoc.blockX else startLoc.blockX
-        val highY = if (lowY == startLoc.blockY) endLoc.blockY else startLoc.blockY
-        val highZ = if (lowZ == startLoc.blockZ) endLoc.blockZ else startLoc.blockZ
-
         WorldEdit.getInstance().newEditSession(BukkitWorld(DungeonTower.dungeonWorld)).use {
             val x = dungeonStartLoc!!.blockX
             val y = dungeonStartLoc!!.blockY
             val z = dungeonStartLoc!!.blockZ
+            val endX = dungeonEndLoc!!.blockX
+            val endY = dungeonEndLoc!!.blockY
+            val endZ = dungeonEndLoc!!.blockZ
             it.setBlocks(CuboidRegion(BukkitWorld(DungeonTower.dungeonWorld),
                 BlockVector3.at(x,y,z),
-                BlockVector3.at(x+highX-lowX,y+highY-lowY,z+highZ-lowZ)), BlockTypes.AIR!!.defaultState
+                BlockVector3.at(endX, endY, endZ)), BlockTypes.AIR!!.defaultState
             )
         }
 
