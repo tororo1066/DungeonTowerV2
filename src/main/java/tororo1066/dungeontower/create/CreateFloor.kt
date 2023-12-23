@@ -1,5 +1,6 @@
 package tororo1066.dungeontower.create
 
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
@@ -63,6 +64,35 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
             }
         }
 
+        fun SInventory.settingClearCondition(taskEnum: FloorData.ClearTaskEnum): SInventoryItem {
+            val task = tasks[taskEnum]!!
+            return SInventoryItem(Material.DIAMOND_BLOCK).setDisplayName("§aタスク達成条件を設定する")
+                .addLore("§d現在の値: ${task.condition.displayName}")
+                .setCanClick(false).setClickEvent {
+                    val settingInv = object : LargeSInventory(SJavaPlugin.plugin, "設定") {
+                        override fun renderMenu(p: Player): Boolean {
+                            val items = arrayListOf<SInventoryItem>()
+                            FloorData.ClearCondition.values().forEach { condition ->
+                                items.add(SInventoryItem(Material.EMERALD_BLOCK).setDisplayName("§a${condition.displayName}")
+                                    .addLore("§d現在の値: ${if (task.condition == condition) "§f§l[§a§l有効§f§l]" else "§f§l[§c§l無効§f§l]"}")
+                                    .setCanClick(false).setClickEvent {
+                                        task.condition = condition
+                                        val dataTask = data.clearTask.find { it.type == taskEnum }
+                                        if (dataTask != null){
+                                            dataTask.condition = condition
+                                        }
+                                        p.closeInventory()
+                                    })
+                            }
+                            setResourceItems(items)
+                            return true
+                        }
+                    }
+
+                    moveChildInventory(settingInv,p)
+                }
+        }
+
         val items = arrayListOf(
             createInputItem(SItem(Material.CLOCK).setDisplayName("§a制限時間を設定する")
                 .addLore("§d現在の値: ${data.time}秒"),Int::class.java) { int, _ ->
@@ -95,7 +125,8 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                                                             allRenderMenu(p)
                                                         },
                                                     settingScoreboard(FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS),
-                                                    settingClearScoreboard(FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS)
+                                                    settingClearScoreboard(FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS),
+                                                    settingClearCondition(FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS)
                                                 )
                                                 setResourceItems(items)
                                                 return true
@@ -133,7 +164,8 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                                                         }
                                                     },
                                                     settingScoreboard(FloorData.ClearTaskEnum.ENTER_COMMAND),
-                                                    settingClearScoreboard(FloorData.ClearTaskEnum.ENTER_COMMAND)
+                                                    settingClearScoreboard(FloorData.ClearTaskEnum.ENTER_COMMAND),
+                                                    settingClearCondition(FloorData.ClearTaskEnum.ENTER_COMMAND)
                                                 )
 
                                                 setResourceItems(items)
@@ -176,6 +208,57 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                                 .addLore("§d<uuid> ->プレイヤーのUUID"),String::class.java,"/<コマンド>") { str, _ ->
                                 data.joinCommands.add(str)
                                 allRenderMenu(p)
+                            })
+
+                            setResourceItems(items)
+                            return true
+                        }
+                    }
+
+                    moveChildInventory(settingInv,p)
+                },
+            createInputItem(SItem(Material.OAK_PLANKS).setDisplayName("§6始点を変更する")
+                .addLore("§d現在の値: ${data.parallelFloorOrigin?.toLocString(LocType.BLOCK_COMMA)}"),Location::class.java,"/<座標>") { location, _ ->
+                   data.parallelFloorOrigin = location
+            },
+            SInventoryItem(Material.GRASS_BLOCK).setDisplayName("§aサブフロアを設定する")
+                .setCanClick(false).setClickEvent {
+                    val settingInv = object : LargeSInventory(SJavaPlugin.plugin, "サブフロアを設定する"){
+
+                        override fun renderMenu(p: Player): Boolean {
+                            val items = arrayListOf<SInventoryItem>()
+
+                            data.subFloors.forEach {
+                                items.add(SInventoryItem(Material.REDSTONE_BLOCK)
+                                    .setDisplayName("§d確率:${it.first}/1000000§f,§6フロア:${it.second.internalName}")
+                                    .addLore("§cシフト左クリックで削除")
+                                    .setCanClick(false).setClickEvent second@ { e ->
+                                        if (e.click != ClickType.SHIFT_LEFT)return@second
+                                        data.subFloors.remove(it)
+                                        allRenderMenu(p)
+                                    })
+                            }
+
+                            items.add(createInputItem(SItem(Material.EMERALD_BLOCK).setDisplayName("§a追加")
+                                .addLore("§a合計の確率:${data.subFloors.sumOf { sum -> sum.first }}/1000000"),
+                                String::class.java,
+                                "§dフロア名を入れてください",
+                                true
+                            ) { str, _ ->
+                                val floor = DungeonTower.floorData[str]
+                                if (floor == null) {
+                                    p.sendPrefixMsg(SStr("&cフロアが存在しません"))
+                                    open(p)
+                                    return@createInputItem
+                                }
+                                DungeonTower.sInput.sendInputCUI(
+                                    p,
+                                    Int::class.java,
+                                    "§d確率を入れてください"
+                                ) { chance ->
+                                    data.subFloors.add(Pair(chance, floor.newInstance()))
+                                    open(p)
+                                }
                             })
 
                             setResourceItems(items)
@@ -240,6 +323,8 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
         }
         config.set("clearTasks",clearTasks)
         config.set("joinCommands",data.joinCommands)
+        config.set("parallelFloorOrigin",data.parallelFloorOrigin?.toLocString(LocType.BLOCK_COMMA))
+        config.set("subFloors",data.subFloors.map { "${it.first},${it.second.internalName}" })
 
         if (SJavaPlugin.sConfig.saveConfig(config,"floors/${data.internalName}")){
             data.yml = config

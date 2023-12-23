@@ -24,7 +24,10 @@ import org.bukkit.loot.LootContext
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitRunnable
 import tororo1066.dungeontower.DungeonTower
+import tororo1066.tororopluginapi.SDebug
 import tororo1066.tororopluginapi.sEvent.SEvent
+import tororo1066.tororopluginapi.utils.LocType
+import tororo1066.tororopluginapi.utils.toLocString
 import java.io.File
 import java.util.*
 import kotlin.collections.ArrayList
@@ -42,12 +45,12 @@ class FloorData: Cloneable {
         ENTER_COMMAND
     }
 
-    enum class ClearCondition {
-        CLEAR_PARENT,
-        CLEAR_PARENT_AND_SELF,
-        CLEAR_PARALLEL,
-        CLEAR_PARALLEL_AND_SELF,
-        CLEAR_ALL
+    enum class ClearCondition(val displayName: String) {
+        CLEAR_PARENT("親フロアをクリア"),
+        CLEAR_PARENT_AND_SELF("親フロアと自身をクリア"),
+        CLEAR_PARALLEL("並列フロアをクリア"),
+        CLEAR_PARALLEL_AND_SELF("並列フロアと自身をクリア"),
+        CLEAR_ALL("全てクリア")
     }
 
     class ClearTask(
@@ -84,6 +87,7 @@ class FloorData: Cloneable {
 
     val parallelFloors = ArrayList<FloorData>()
     var parallelFloor = false
+    var parallelFloorOrigin: Location? = null
     lateinit var parent: FloorData
 
     val subFloors = ArrayList<Pair<Int, FloorData>>()
@@ -108,10 +112,10 @@ class FloorData: Cloneable {
                 return find.clear && parallelFloors.none { !it.checkClear(task) } && if (parallelFloor) parent.checkClear(task) else true
             }
             ClearCondition.CLEAR_PARENT -> {
-                return parallelFloor && parent.checkClear(task)
+                return !parallelFloor || parent.checkClear(task)
             }
             ClearCondition.CLEAR_PARENT_AND_SELF -> {
-                return parallelFloor && parent.checkClear(task) && find.clear
+                return find.clear && (!parallelFloor || parent.checkClear(task))
             }
             ClearCondition.CLEAR_PARALLEL -> {
                 return parallelFloors.none { !it.checkClear(task) }
@@ -208,7 +212,12 @@ class FloorData: Cloneable {
         return list
     }
 
+    private fun Location.toBlockVector3(): BlockVector3 {
+        return BlockVector3.at(blockX,blockY,blockZ)
+    }
+
     fun generateFloor(location: Location, direction: Double) {
+
         preventFloorStairs.clear()
         nextFloorStairs.clear()
         spawnerClearTasks.clear()
@@ -221,12 +230,130 @@ class FloorData: Cloneable {
         val highY = if (lowY == startLoc.blockY) endLoc.blockY else startLoc.blockY
         val highZ = if (lowZ == startLoc.blockZ) endLoc.blockZ else startLoc.blockZ
 
-        dungeonStartLoc = location.clone()
-        dungeonEndLoc = location.clone().add(
-            (highX- lowX) * cos(direction) - (highZ - lowZ) * sin(direction),
+        val modifiedDirection = if (direction < 0) direction + 360 else direction
+
+        val dungeonStartLoc = location.clone()
+        val dungeonEndLoc = location.clone().add(
+            (highX- lowX) * cos(modifiedDirection) - (highZ - lowZ) * sin(modifiedDirection),
             (highY - lowY).toDouble(),
-            (highX- lowX) * sin(direction) + (highZ - lowZ) * cos(direction)
+            (highX- lowX) * sin(modifiedDirection) + (highZ - lowZ) * cos(modifiedDirection)
         )
+
+        if (dungeonStartLoc.blockX > dungeonEndLoc.blockX){
+            val temp = dungeonStartLoc.blockX
+            dungeonStartLoc.add((dungeonEndLoc.blockX - dungeonStartLoc.blockX).toDouble(),0.0,0.0)
+            dungeonEndLoc.add((temp - dungeonEndLoc.blockX).toDouble(),0.0,0.0)
+        }
+
+        if (dungeonStartLoc.blockZ > dungeonEndLoc.blockZ){
+            val temp = dungeonStartLoc.blockZ
+            dungeonStartLoc.add(0.0,0.0,(dungeonEndLoc.blockZ - dungeonStartLoc.blockZ).toDouble())
+            dungeonEndLoc.add(0.0,0.0,(temp - dungeonEndLoc.blockZ).toDouble())
+        }
+
+        val buildLocation = dungeonStartLoc.clone()
+        val originLocation = (parallelFloorOrigin?:startLoc).clone()
+
+
+//        if (parallelFloor && parallelFloorOrigin != null){
+//            val parallelFloorOrigin = parallelFloorOrigin!!.clone()
+//            val blockX = parallelFloorOrigin.blockX
+//            val blockZ = parallelFloorOrigin.blockZ
+//            dungeonStartLoc.subtract(
+//                (blockX - startLoc.blockX).toDouble(),
+//                0.0,
+//                (blockZ - startLoc.blockZ).toDouble()
+//            )
+//            dungeonEndLoc.subtract(
+//                (blockX - startLoc.blockX).toDouble(),
+//                0.0,
+//                (blockZ - startLoc.blockZ).toDouble()
+//            )
+//            SDebug.broadcastDebug(1, "dungeonStartLoc: ${dungeonStartLoc.toLocString(LocType.WORLD_BLOCK_COMMA)}, dungeonEndLoc: ${dungeonEndLoc.toLocString(LocType.WORLD_BLOCK_COMMA)}")
+//        }
+
+
+
+
+        val originX = parallelFloorOrigin?.blockX?:startLoc.blockX
+        val originZ = parallelFloorOrigin?.blockZ?:startLoc.blockZ
+        val startX = startLoc.blockX
+        val startZ = startLoc.blockZ
+        val endX = endLoc.blockX
+        val endZ = endLoc.blockZ
+
+//        when(modifiedDirection) {
+//            90.0 -> {
+//                if (startX > o) {
+//                    buildLocation.add(0.0, 0.0, (endX - startX).toDouble())
+//                    SDebug.broadcastDebug(1, "endX - startX: ${endX - startX}")
+//                } else {
+//                    buildLocation.add(0.0, 0.0, (startX - endX).toDouble())
+//                    SDebug.broadcastDebug(1, "startX - endX: ${startX - endX}")
+//                }
+//
+//                if (startZ > endZ) {
+//                    buildLocation.add(0.0, 0.0, (startZ - endZ).toDouble())
+//                    SDebug.broadcastDebug(1, "startZ - endZ: ${startZ - endZ}")
+//                } else {
+//                    buildLocation.add(0.0, 0.0, (endZ - startZ).toDouble())
+//                    SDebug.broadcastDebug(1, "endZ - startZ: ${endZ - startZ}")
+//                }
+////                //startLocからendLocへの進行方向で決める
+////                if (startX > endX && endZ > startZ) { //x- z+はx+
+////                    buildLocation.add((startX - endX).toDouble(), 0.0, 0.0)
+////                    SDebug.broadcastDebug(1, "x- z+はx+")
+////                    SDebug.broadcastDebug(1, "startX - endX: ${startX - endX}")
+////                } else if (endX > startX && startZ > endZ) { //x+ z-はx-
+////                    buildLocation.add((endX - startX).toDouble(), 0.0, 0.0)
+////                    SDebug.broadcastDebug(1, "x+ z-はx-")
+////                    SDebug.broadcastDebug(1, "endX - startX: ${endX - startX}")
+////                } else if (startX > endX && startZ > endZ) { //x- z-はz+
+////                    buildLocation.add(0.0, 0.0, (startZ - endZ).toDouble())
+////                    SDebug.broadcastDebug(1, "x- z-はz+")
+////                    SDebug.broadcastDebug(1, "startZ - endZ: ${startZ - endZ}")
+////                } else if (endX > startX && endZ > startZ) { //x+ z+はz-
+////                    buildLocation.add(0.0, 0.0, (endZ - startZ).toDouble())
+////                    SDebug.broadcastDebug(1, "x+ z+はz-")
+////                    SDebug.broadcastDebug(1, "endZ - startZ: ${endZ - startZ}")
+////                }
+//            }
+//
+//            180.0 -> {
+//                if (startX > endX) {
+//                    buildLocation.add((startX - endX).toDouble(), 0.0, 0.0)
+//                } else {
+//                    buildLocation.add((endX - startX).toDouble(), 0.0, 0.0)
+//                }
+//
+//                if (startZ > endZ) {
+//                    buildLocation.add(0.0, 0.0, (startZ - endZ).toDouble())
+//                } else {
+//                    buildLocation.add(0.0, 0.0, (endZ - startZ).toDouble())
+//                }
+//            }
+//
+//            270.0 -> {
+//                if (startX > endX) {
+//                    buildLocation.add(0.0, 0.0, (endX - startX).toDouble())
+//                    SDebug.broadcastDebug(1, "endX - startX: ${endX - startX}")
+//                } else {
+//                    buildLocation.add(0.0, 0.0, (startX - endX).toDouble())
+//                    SDebug.broadcastDebug(1, "startX - endX: ${startX - endX}")
+//                }
+//
+//                if (startZ > endZ) {
+//                    buildLocation.add(0.0, 0.0, (startZ - endZ).toDouble())
+//                    SDebug.broadcastDebug(1, "startZ - endZ: ${startZ - endZ}")
+//                } else {
+//                    buildLocation.add(0.0, 0.0, (endZ - startZ).toDouble())
+//                    SDebug.broadcastDebug(1, "endZ - startZ: ${endZ - startZ}")
+//                }
+//            }
+//        }
+
+        this.dungeonStartLoc = dungeonStartLoc
+        this.dungeonEndLoc = dungeonEndLoc
 
         val region = CuboidRegion(
             BukkitWorld(DungeonTower.floorWorld),
@@ -234,49 +361,49 @@ class FloorData: Cloneable {
             BlockVector3.at(highX, highY, highZ)
         )
         val clipboard = BlockArrayClipboard(region)
+        clipboard.origin = originLocation.toBlockVector3()
         val forwardExtentCopy =
             ForwardExtentCopy(BukkitWorld(DungeonTower.floorWorld), region, clipboard, region.minimumPoint)
         Operations.complete(forwardExtentCopy)
 
         if (parallelFloor) {
-            val rad = Math.toRadians(direction)
-            DungeonTower.nowX += abs(cos(rad) * (highX - lowX)).toInt()
+            DungeonTower.nowX += abs(dungeonEndLoc.blockX - dungeonStartLoc.blockX)
             if (DungeonTower.xLimit <= DungeonTower.nowX) {
                 DungeonTower.nowX = 0
             }
         } else {
-            val rad = Math.toRadians(direction)
-            DungeonTower.nowX += abs(cos(rad) * (highX - lowX)).toInt() + DungeonTower.dungeonXSpace
+            DungeonTower.nowX += abs(dungeonEndLoc.blockX - dungeonStartLoc.blockX) + DungeonTower.dungeonXSpace
             if (DungeonTower.xLimit <= DungeonTower.nowX) {
                 DungeonTower.nowX = 0
             }
         }
 
+
         WorldEdit.getInstance().newEditSession(BukkitWorld(DungeonTower.dungeonWorld)).use {
             val operation = ClipboardHolder(clipboard)
                 .apply {
-                    transform = this.transform.combine(AffineTransform().apply {
-                        rotateY(direction)
-                    })
+                    transform = AffineTransform()
+                        .rotateY(direction)
                 }
                 .createPaste(it)
-                .to(BlockVector3.at(location.blockX, location.blockY, location.blockZ))
-                .ignoreAirBlocks(true)
+                .to(buildLocation.toBlockVector3())
+                .ignoreAirBlocks(false)
                 .build()
             Operations.complete(operation)
         }
 
-        val dungeonX = dungeonStartLoc!!.blockX..dungeonEndLoc!!.blockX
-        val dungeonY = dungeonStartLoc!!.blockY..dungeonEndLoc!!.blockY
-        val dungeonZ = dungeonStartLoc!!.blockZ..dungeonEndLoc!!.blockZ
 
-        for ((indexX, x) in (dungeonX).withIndex()) {
-            for ((indexY, y) in (dungeonY).withIndex()) {
-                for ((indexZ, z) in (dungeonZ).withIndex()) {
+
+        for ((indexX, x) in (lowX..highX).withIndex()) {
+            for ((indexY, y) in (lowY..highY).withIndex()) {
+                for ((indexZ, z) in (lowZ..highZ).withIndex()) {
                     val block = DungeonTower.floorWorld.getBlockAt(x, y, z)
                     val placeLoc =
-                        dungeonStartLoc!!.clone().add(indexX.toDouble(), indexY.toDouble(), indexZ.toDouble())
+                        dungeonStartLoc.clone().add(indexX.toDouble(), indexY.toDouble(), indexZ.toDouble())
 
+                    if (parallelFloor){
+                        placeLoc.block.type = Material.EMERALD_BLOCK
+                    }
                     when (block.type) {
 
                         Material.OAK_SIGN -> {
@@ -416,6 +543,10 @@ class FloorData: Cloneable {
                 BlockVector3.at(x+highX-lowX,y+highY-lowY,z+highZ-lowZ)), BlockTypes.AIR!!.defaultState
             )
         }
+
+        parallelFloors.forEach {
+            it.removeFloor()
+        }
     }
 
 
@@ -424,9 +555,9 @@ class FloorData: Cloneable {
             internalName = this@FloorData.internalName
             yml = this@FloorData.yml
             val start = yml.getString("startLoc")!!.split(",").map { it.toInt().toDouble() }
-            startLoc = Location(DungeonTower.dungeonWorld,start[0],start[1],start[2])
+            startLoc = Location(DungeonTower.floorWorld,start[0],start[1],start[2])
             val end = yml.getString("endLoc")!!.split(",").map { it.toInt().toDouble() }
-            endLoc = Location(DungeonTower.dungeonWorld,end[0],end[1],end[2])
+            endLoc = Location(DungeonTower.floorWorld,end[0],end[1],end[2])
             initialTime = yml.getInt("time",300)
             time = initialTime
             joinCommands.addAll(yml.getStringList("joinCommands"))
@@ -440,6 +571,10 @@ class FloorData: Cloneable {
                 task.scoreboardName = split.reversed()[1]
                 task.clearScoreboardName = split.last()
                 clearTask.add(task)
+            }
+            yml.getString("parallelFloorOrigin")?.let {
+                val split = it.split(",")
+                parallelFloorOrigin = Location(DungeonTower.floorWorld,split[0].toDouble(),split[1].toDouble(),split[2].toDouble())
             }
             yml.getStringList("subFloors").forEach {
                 val split = it.split(",")
@@ -458,9 +593,9 @@ class FloorData: Cloneable {
                 internalName = file.nameWithoutExtension
                 this.yml = yml
                 val start = yml.getString("startLoc")!!.split(",").map { it.toInt().toDouble() }
-                startLoc = Location(DungeonTower.dungeonWorld,start[0],start[1],start[2])
+                startLoc = Location(DungeonTower.floorWorld,start[0],start[1],start[2])
                 val end = yml.getString("endLoc")!!.split(",").map { it.toInt().toDouble() }
-                endLoc = Location(DungeonTower.dungeonWorld,end[0],end[1],end[2])
+                endLoc = Location(DungeonTower.floorWorld,end[0],end[1],end[2])
                 initialTime = yml.getInt("time",300)
                 time = initialTime
                 joinCommands.addAll(yml.getStringList("joinCommands"))
@@ -474,6 +609,10 @@ class FloorData: Cloneable {
                     task.scoreboardName = split.reversed()[1]
                     task.clearScoreboardName = split.last()
                     clearTask.add(task)
+                }
+                yml.getString("parallelFloorOrigin")?.let {
+                    val split = it.split(",")
+                    parallelFloorOrigin = Location(DungeonTower.floorWorld,split[0].toDouble(),split[1].toDouble(),split[2].toDouble())
                 }
                 yml.getStringList("subFloors").forEach {
                     val split = it.split(",")

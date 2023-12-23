@@ -40,13 +40,15 @@ open class ActionBarBaseGUI(val p: Player): Listener {
             }
             builder.append(park.getSkillName())
             val text = text(builder.toString()).font(Key.key("font_plus_6"))
-            Bukkit.broadcast(text)
             text
         } else {
             text("")
         }
     }
-    var onClick: ((Int, Int) -> Unit)? = null
+    var onClick: ((Int, Int) -> Unit)? = { x, y ->
+        val park = items.entries.find { it.key.xLocation.contains(x) && it.key.yLocation.contains(y) }?.value
+        park?.registerSkill(p)
+    }
 
     private fun registerItems(vararg items: AbstractPark){
         for (item in items){

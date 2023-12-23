@@ -264,7 +264,6 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
                 obj.getScore("§6タスク").score = 0
                 var scoreInt = -1
                 nowFloor.clearTask.forEach {
-
                     obj.getScore(formatTask(nowFloor, it)).score = scoreInt
                     scoreInt--
                 }
