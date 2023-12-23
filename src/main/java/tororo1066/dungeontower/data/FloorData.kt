@@ -229,12 +229,25 @@ class FloorData: Cloneable {
 
         val modifiedDirection = Math.toRadians(if (direction < 0) direction + 360 else direction)
 
-        val dungeonStartLoc = location.clone()
-        val dungeonEndLoc = location.clone().add(
-            (highX- lowX) * cos(modifiedDirection) + (highZ - lowZ) * sin(modifiedDirection),
-            (highY - lowY).toDouble(),
-            (highZ- lowZ) * cos(modifiedDirection) - (highX - lowX) * sin(modifiedDirection)
+        val originLocation = (parallelFloorOrigin?:startLoc).clone()
+
+        val originX = originLocation.blockX
+        val originY = originLocation.blockY
+        val originZ = originLocation.blockZ
+
+        val dungeonStartLoc = location.clone().add(
+            (lowX - originX) * cos(modifiedDirection) + (lowZ - originZ) * sin(modifiedDirection),
+            (lowY - originY).toDouble(),
+            (lowZ - originZ) * cos(modifiedDirection) - (lowX - originX) * sin(modifiedDirection)
         )
+        val dungeonEndLoc = location.clone().add(
+            (highX - originX) * cos(modifiedDirection) + (highZ - originZ) * sin(modifiedDirection),
+            (highY - originY).toDouble(),
+            (highZ - originZ) * cos(modifiedDirection) - (highX - originX) * sin(modifiedDirection)
+        )
+
+        val buildLocation = location.clone()
+
 //        Bukkit.broadcastMessage("dungeonStartLoc: ${dungeonStartLoc.toLocString(LocType.WORLD_BLOCK_COMMA)}")
 //        Bukkit.broadcastMessage("dungeonEndLoc: ${dungeonEndLoc.toLocString(LocType.WORLD_BLOCK_COMMA)}")
 
@@ -249,9 +262,6 @@ class FloorData: Cloneable {
             dungeonStartLoc.add(0.0,0.0,(dungeonStartLoc.blockZ - dungeonEndLoc.blockZ).toDouble())
             dungeonEndLoc.add(0.0,0.0,(temp - dungeonEndLoc.blockZ).toDouble())
         }
-
-        val buildLocation = dungeonStartLoc.clone()
-        val originLocation = (parallelFloorOrigin?:startLoc).clone()
 
 
 //        if (parallelFloor && parallelFloorOrigin != null){
@@ -287,18 +297,6 @@ class FloorData: Cloneable {
             ForwardExtentCopy(BukkitWorld(DungeonTower.floorWorld), region, clipboard, region.minimumPoint)
         Operations.complete(forwardExtentCopy)
 
-        if (parallelFloor) {
-            DungeonTower.nowX += abs(dungeonEndLoc.blockX - dungeonStartLoc.blockX)
-            if (DungeonTower.xLimit <= DungeonTower.nowX) {
-                DungeonTower.nowX = 0
-            }
-        } else {
-            DungeonTower.nowX += abs(dungeonEndLoc.blockX - dungeonStartLoc.blockX) + DungeonTower.dungeonXSpace
-            if (DungeonTower.xLimit <= DungeonTower.nowX) {
-                DungeonTower.nowX = 0
-            }
-        }
-
 
         WorldEdit.getInstance().newEditSession(BukkitWorld(DungeonTower.dungeonWorld)).use {
             val operation = ClipboardHolder(clipboard)
@@ -326,9 +324,6 @@ class FloorData: Cloneable {
                     val placeLoc =
                         dungeonStartLoc.clone().add(indexX.toDouble() * xSign, indexY.toDouble() * ySign, indexZ.toDouble() * zSign)
 
-//                    if (parallelFloor && block.type == Material.AIR){
-//                        placeLoc.block.type = Material.EMERALD_BLOCK
-//                    }
                     when (block.type) {
 
                         Material.OAK_SIGN -> {
@@ -398,15 +393,85 @@ class FloorData: Cloneable {
         generated = true
     }
 
-    fun generateFloor() {
-        generateFloor(
-            Location(
-                DungeonTower.dungeonWorld,
-                DungeonTower.nowX.toDouble(),
-                DungeonTower.y.toDouble(),
-                0.0
-            ), 0.0
+    fun calculateDistance(location: Location, direction: Double): Int {
+        val lowX = min(startLoc.blockX, endLoc.blockX)
+        val lowY = min(startLoc.blockY, endLoc.blockY)
+        val lowZ = min(startLoc.blockZ, endLoc.blockZ)
+        val highX = if (lowX == startLoc.blockX) endLoc.blockX else startLoc.blockX
+        val highY = if (lowY == startLoc.blockY) endLoc.blockY else startLoc.blockY
+        val highZ = if (lowZ == startLoc.blockZ) endLoc.blockZ else startLoc.blockZ
+
+        val modifiedDirection = Math.toRadians(if (direction < 0) direction + 360 else direction)
+
+        val originLocation = (parallelFloorOrigin?:startLoc).clone()
+
+        val originX = originLocation.blockX
+        val originY = originLocation.blockY
+        val originZ = originLocation.blockZ
+
+        val dungeonStartLoc = location.clone().add(
+            (lowX - originX) * cos(modifiedDirection) + (lowZ - originZ) * sin(modifiedDirection),
+            (lowY - originY).toDouble(),
+            (lowZ - originZ) * cos(modifiedDirection) - (lowX - originX) * sin(modifiedDirection)
         )
+        val dungeonEndLoc = location.clone().add(
+            (highX - originX) * cos(modifiedDirection) + (highZ - originZ) * sin(modifiedDirection),
+            (highY - originY).toDouble(),
+            (highZ - originZ) * cos(modifiedDirection) - (highX - originX) * sin(modifiedDirection)
+        )
+
+        val xSign = sign(dungeonEndLoc.blockX.toDouble() - dungeonStartLoc.blockX.toDouble())
+        val ySign = sign(dungeonEndLoc.blockY.toDouble() - dungeonStartLoc.blockY.toDouble())
+        val zSign = sign(dungeonEndLoc.blockZ.toDouble() - dungeonStartLoc.blockZ.toDouble())
+
+        var distance = dungeonEndLoc.blockX - dungeonStartLoc.blockX
+
+        for ((indexX, x) in (lowX..highX).withIndex()) {
+            for ((indexY, y) in (lowY..highY).withIndex()) {
+                for ((indexZ, z) in (lowZ..highZ).withIndex()) {
+                    val block = DungeonTower.floorWorld.getBlockAt(x, y, z)
+
+                    val placeLoc =
+                        dungeonStartLoc.clone()
+                            .add(indexX.toDouble() * xSign, indexY.toDouble() * ySign, indexZ.toDouble() * zSign)
+
+                    when (block.type) {
+
+                        Material.OAK_SIGN -> {
+                            val data = DungeonTower.floorWorld.getBlockState(x, y, z) as Sign
+                            when (data.getLine(0)) {
+                                "floor" -> {
+                                    val floor = (DungeonTower.floorData[data.getLine(1)] ?: continue).newInstance()
+                                    val rotate = data.getLine(3).toDoubleOrNull() ?: 0.0
+                                    distance += floor.calculateDistance(placeLoc, rotate)
+                                }
+                                else -> {}
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+            }
+        }
+
+        return distance
+    }
+
+    fun generateFloor() {
+        val location = Location(
+            DungeonTower.dungeonWorld,
+            DungeonTower.nowX.toDouble(),
+            DungeonTower.y.toDouble(),
+            0.0
+        )
+        DungeonTower.nowX += calculateDistance(location, 0.0) + 1 + DungeonTower.dungeonXSpace
+        val newLocation = Location(
+            DungeonTower.dungeonWorld,
+            DungeonTower.nowX.toDouble(),
+            DungeonTower.y.toDouble(),
+            0.0
+        )
+        generateFloor(newLocation, 0.0)
     }
 
     fun activate() {
