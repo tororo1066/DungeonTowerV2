@@ -238,18 +238,20 @@ class FloorData: Cloneable {
             (highY - lowY).toDouble(),
             (highX- lowX) * sin(modifiedDirection) + (highZ - lowZ) * cos(modifiedDirection)
         )
+//        Bukkit.broadcastMessage("dungeonStartLoc: ${dungeonStartLoc.toLocString(LocType.WORLD_BLOCK_COMMA)}")
+//        Bukkit.broadcastMessage("dungeonEndLoc: ${dungeonEndLoc.toLocString(LocType.WORLD_BLOCK_COMMA)}")
 
-        if (dungeonStartLoc.blockX > dungeonEndLoc.blockX){
-            val temp = dungeonStartLoc.blockX
-            dungeonStartLoc.add((dungeonEndLoc.blockX - dungeonStartLoc.blockX).toDouble(),0.0,0.0)
-            dungeonEndLoc.add((temp - dungeonEndLoc.blockX).toDouble(),0.0,0.0)
-        }
-
-        if (dungeonStartLoc.blockZ > dungeonEndLoc.blockZ){
-            val temp = dungeonStartLoc.blockZ
-            dungeonStartLoc.add(0.0,0.0,(dungeonEndLoc.blockZ - dungeonStartLoc.blockZ).toDouble())
-            dungeonEndLoc.add(0.0,0.0,(temp - dungeonEndLoc.blockZ).toDouble())
-        }
+//        if (dungeonStartLoc.blockX > dungeonEndLoc.blockX){
+//            val temp = dungeonStartLoc.blockX
+//            dungeonStartLoc.add((dungeonStartLoc.blockX - dungeonEndLoc.blockX).toDouble(),0.0,0.0)
+//            dungeonEndLoc.add((temp - dungeonEndLoc.blockX).toDouble(),0.0,0.0)
+//        }
+//
+//        if (dungeonStartLoc.blockZ > dungeonEndLoc.blockZ){
+//            val temp = dungeonStartLoc.blockZ
+//            dungeonStartLoc.add(0.0,0.0,(dungeonStartLoc.blockZ - dungeonEndLoc.blockZ).toDouble())
+//            dungeonEndLoc.add(0.0,0.0,(temp - dungeonEndLoc.blockZ).toDouble())
+//        }
 
         val buildLocation = dungeonStartLoc.clone()
         val originLocation = (parallelFloorOrigin?:startLoc).clone()
@@ -272,88 +274,10 @@ class FloorData: Cloneable {
 //            SDebug.broadcastDebug(1, "dungeonStartLoc: ${dungeonStartLoc.toLocString(LocType.WORLD_BLOCK_COMMA)}, dungeonEndLoc: ${dungeonEndLoc.toLocString(LocType.WORLD_BLOCK_COMMA)}")
 //        }
 
-
-
-
-        val originX = parallelFloorOrigin?.blockX?:startLoc.blockX
-        val originZ = parallelFloorOrigin?.blockZ?:startLoc.blockZ
-        val startX = startLoc.blockX
-        val startZ = startLoc.blockZ
-        val endX = endLoc.blockX
-        val endZ = endLoc.blockZ
-
-//        when(modifiedDirection) {
-//            90.0 -> {
-//                if (startX > o) {
-//                    buildLocation.add(0.0, 0.0, (endX - startX).toDouble())
-//                    SDebug.broadcastDebug(1, "endX - startX: ${endX - startX}")
-//                } else {
-//                    buildLocation.add(0.0, 0.0, (startX - endX).toDouble())
-//                    SDebug.broadcastDebug(1, "startX - endX: ${startX - endX}")
-//                }
-//
-//                if (startZ > endZ) {
-//                    buildLocation.add(0.0, 0.0, (startZ - endZ).toDouble())
-//                    SDebug.broadcastDebug(1, "startZ - endZ: ${startZ - endZ}")
-//                } else {
-//                    buildLocation.add(0.0, 0.0, (endZ - startZ).toDouble())
-//                    SDebug.broadcastDebug(1, "endZ - startZ: ${endZ - startZ}")
-//                }
-////                //startLocからendLocへの進行方向で決める
-////                if (startX > endX && endZ > startZ) { //x- z+はx+
-////                    buildLocation.add((startX - endX).toDouble(), 0.0, 0.0)
-////                    SDebug.broadcastDebug(1, "x- z+はx+")
-////                    SDebug.broadcastDebug(1, "startX - endX: ${startX - endX}")
-////                } else if (endX > startX && startZ > endZ) { //x+ z-はx-
-////                    buildLocation.add((endX - startX).toDouble(), 0.0, 0.0)
-////                    SDebug.broadcastDebug(1, "x+ z-はx-")
-////                    SDebug.broadcastDebug(1, "endX - startX: ${endX - startX}")
-////                } else if (startX > endX && startZ > endZ) { //x- z-はz+
-////                    buildLocation.add(0.0, 0.0, (startZ - endZ).toDouble())
-////                    SDebug.broadcastDebug(1, "x- z-はz+")
-////                    SDebug.broadcastDebug(1, "startZ - endZ: ${startZ - endZ}")
-////                } else if (endX > startX && endZ > startZ) { //x+ z+はz-
-////                    buildLocation.add(0.0, 0.0, (endZ - startZ).toDouble())
-////                    SDebug.broadcastDebug(1, "x+ z+はz-")
-////                    SDebug.broadcastDebug(1, "endZ - startZ: ${endZ - startZ}")
-////                }
-//            }
-//
-//            180.0 -> {
-//                if (startX > endX) {
-//                    buildLocation.add((startX - endX).toDouble(), 0.0, 0.0)
-//                } else {
-//                    buildLocation.add((endX - startX).toDouble(), 0.0, 0.0)
-//                }
-//
-//                if (startZ > endZ) {
-//                    buildLocation.add(0.0, 0.0, (startZ - endZ).toDouble())
-//                } else {
-//                    buildLocation.add(0.0, 0.0, (endZ - startZ).toDouble())
-//                }
-//            }
-//
-//            270.0 -> {
-//                if (startX > endX) {
-//                    buildLocation.add(0.0, 0.0, (endX - startX).toDouble())
-//                    SDebug.broadcastDebug(1, "endX - startX: ${endX - startX}")
-//                } else {
-//                    buildLocation.add(0.0, 0.0, (startX - endX).toDouble())
-//                    SDebug.broadcastDebug(1, "startX - endX: ${startX - endX}")
-//                }
-//
-//                if (startZ > endZ) {
-//                    buildLocation.add(0.0, 0.0, (startZ - endZ).toDouble())
-//                    SDebug.broadcastDebug(1, "startZ - endZ: ${startZ - endZ}")
-//                } else {
-//                    buildLocation.add(0.0, 0.0, (endZ - startZ).toDouble())
-//                    SDebug.broadcastDebug(1, "endZ - startZ: ${endZ - startZ}")
-//                }
-//            }
-//        }
-
         this.dungeonStartLoc = dungeonStartLoc
         this.dungeonEndLoc = dungeonEndLoc
+        Bukkit.broadcastMessage("modifiedDungeonStartLoc: ${dungeonStartLoc.toLocString(LocType.WORLD_BLOCK_COMMA)}")
+        Bukkit.broadcastMessage("modifiedDungeonEndLoc: ${dungeonEndLoc.toLocString(LocType.WORLD_BLOCK_COMMA)}")
 
         val region = CuboidRegion(
             BukkitWorld(DungeonTower.floorWorld),
@@ -383,7 +307,7 @@ class FloorData: Cloneable {
             val operation = ClipboardHolder(clipboard)
                 .apply {
                     transform = AffineTransform()
-                        .rotateY(direction)
+                        .rotateY(modifiedDirection)
                 }
                 .createPaste(it)
                 .to(buildLocation.toBlockVector3())
