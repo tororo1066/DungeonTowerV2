@@ -230,7 +230,7 @@ class FloorData: Cloneable {
         val highY = if (lowY == startLoc.blockY) endLoc.blockY else startLoc.blockY
         val highZ = if (lowZ == startLoc.blockZ) endLoc.blockZ else startLoc.blockZ
 
-        val modifiedDirection = if (direction < 0) direction + 360 else direction
+        val modifiedDirection = Math.toRadians(if (direction < 0) direction + 360 else direction)
 
         val dungeonStartLoc = location.clone()
         val dungeonEndLoc = location.clone().add(
@@ -306,8 +306,8 @@ class FloorData: Cloneable {
         WorldEdit.getInstance().newEditSession(BukkitWorld(DungeonTower.dungeonWorld)).use {
             val operation = ClipboardHolder(clipboard)
                 .apply {
-                    transform = AffineTransform()
-                        .rotateY(modifiedDirection)
+                    transform = transform.combine(AffineTransform()
+                        .rotateY(direction))
                 }
                 .createPaste(it)
                 .to(buildLocation.toBlockVector3())
