@@ -32,10 +32,7 @@ import java.io.File
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.min
-import kotlin.math.sin
+import kotlin.math.*
 import kotlin.random.nextInt
 
 class FloorData: Cloneable {
@@ -316,14 +313,18 @@ class FloorData: Cloneable {
             Operations.complete(operation)
         }
 
+        val xSign = sign(dungeonEndLoc.blockX.toDouble() - dungeonStartLoc.blockX.toDouble())
+        val ySign = sign(dungeonEndLoc.blockY.toDouble() - dungeonStartLoc.blockY.toDouble())
+        val zSign = sign(dungeonEndLoc.blockZ.toDouble() - dungeonStartLoc.blockZ.toDouble())
 
 
         for ((indexX, x) in (lowX..highX).withIndex()) {
             for ((indexY, y) in (lowY..highY).withIndex()) {
                 for ((indexZ, z) in (lowZ..highZ).withIndex()) {
                     val block = DungeonTower.floorWorld.getBlockAt(x, y, z)
+
                     val placeLoc =
-                        dungeonStartLoc.clone().add(indexX.toDouble(), indexY.toDouble(), indexZ.toDouble())
+                        dungeonStartLoc.clone().add(indexX.toDouble() * xSign, indexY.toDouble() * ySign, indexZ.toDouble() * zSign)
 
                     if (parallelFloor){
                         placeLoc.block.type = Material.EMERALD_BLOCK
