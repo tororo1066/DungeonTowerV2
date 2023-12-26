@@ -5,6 +5,7 @@ import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
 import org.bukkit.scoreboard.Scoreboard
 import tororo1066.dungeontower.DungeonTower
+import tororo1066.dungeontower.skilltree.ActionType
 import tororo1066.dungeontower.task.DungeonTowerTask
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.utils.sendMessage
@@ -51,6 +52,12 @@ class PartyData: Cloneable {
     fun scoreboard(scoreboard: Scoreboard){
         players.keys.forEach {
             it.toPlayer()?.scoreboard = scoreboard
+        }
+    }
+
+    fun invokePark(actionType: ActionType){
+        players.values.forEach {
+            it.invokePark(actionType)
         }
     }
 

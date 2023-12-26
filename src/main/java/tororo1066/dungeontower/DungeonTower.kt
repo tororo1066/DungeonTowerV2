@@ -11,11 +11,11 @@ import tororo1066.dungeontower.command.DungeonCommand
 import tororo1066.dungeontower.command.DungeonTaskCommand
 import tororo1066.dungeontower.data.*
 import tororo1066.dungeontower.script.TodayEntryNumberFunction
-import tororo1066.dungeontower.sql.TowerLogDB
+import tororo1066.dungeontower.skilltree.ParkDatabase
+import tororo1066.dungeontower.logging.TowerLogDB
 import tororo1066.tororopluginapi.SInput
 import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
-import tororo1066.tororopluginapi.mysql.SMySQL
 import tororo1066.tororopluginapi.otherUtils.UsefulUtility
 import tororo1066.tororopluginapi.sEvent.SEvent
 import tororo1066.tororopluginapi.utils.sendMessage
@@ -40,6 +40,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
         lateinit var mythic: BukkitAPIHelper //スポナーでmmのmobを湧かすために使用
         lateinit var sInput: SInput //入力マネージャー
         lateinit var util: UsefulUtility
+        lateinit var parkDB: ParkDatabase
 
         val lootData = HashMap<String,LootData>() //宝箱のデータ
         val spawnerData = HashMap<String,SpawnerData>() //スポナーのデータ
@@ -93,6 +94,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
 
             DungeonCommand()
             TowerLogDB()
+            parkDB = ParkDatabase()
         }
     }
 

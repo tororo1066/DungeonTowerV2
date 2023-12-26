@@ -166,15 +166,16 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
             val world = startLoc.world
             return world.name == p.world.name && x.contains(p.location.blockX) && y.contains(p.location.blockY) && z.contains(p.location.blockZ)
         }
-        if (check(mainFloor)){
-            return mainFloor
-        }
 
         mainFloor.parallelFloors.forEach { parallel ->
             if (check(parallel)){
                 return parallel
             }
             getInFloor(parallel,p)?.let { return it }
+        }
+
+        if (check(mainFloor)){
+            return mainFloor
         }
 
         return null

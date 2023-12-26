@@ -37,7 +37,7 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
                         }
 
                         items.add(createInputItem(SItem(Material.EMERALD_BLOCK).setDisplayName("§a追加"), String::class.java,
-                            "§dMythicMobを選択してください", true){ str, _ ->
+                            "§dMythicMobを選択してください", invOpenCancel = true){ str, _ ->
                             val mob = DungeonTower.mythic.getMythicMob(str)
                             if (mob == null){
                                 p.sendPrefixMsg(SStr("§cそのMythicMobは存在しません！"))

@@ -5,7 +5,7 @@ import com.ezylang.evalex.data.EvaluationValue
 import com.ezylang.evalex.functions.AbstractFunction
 import com.ezylang.evalex.functions.FunctionParameter
 import com.ezylang.evalex.parser.Token
-import tororo1066.dungeontower.sql.TowerLogDB
+import tororo1066.dungeontower.logging.TowerLogDB
 import tororo1066.tororopluginapi.script.ScriptFile
 
 @FunctionParameter(name = "uuid")

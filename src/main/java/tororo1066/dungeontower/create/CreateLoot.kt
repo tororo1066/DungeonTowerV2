@@ -45,7 +45,7 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJava
                         }
                         items.add(createInputItem(SItem(Material.EMERALD_BLOCK).setDisplayName("§a追加")
                             .addLore("§a合計の確率:${data.items.sumOf { it.first }}/1000000"),
-                            Int::class.java,"§d確率を設定してください(手に登録するアイテムを持ってください)",true) { int, _ ->
+                            Int::class.java,"§d確率を設定してください(手に登録するアイテムを持ってください)", invOpenCancel = true) { int, _ ->
                             val item = p.inventory.itemInMainHand
                             if (item.type.isAir){
                                 p.sendPrefixMsg(SStr("§c手にアイテムを持ってください！"))

@@ -19,7 +19,7 @@ class TowerData: Cloneable {
     var internalName = ""
     //名前
     var name = ""
-    //挑戦可能な最大人数 -1でなし
+    //挑戦可能な最大人数
     var partyLimit = -1
     //フロアたち keyは階層、Pairのfirstは確率
     val floors = HashMap<Int,ArrayList<Pair<Int,FloorData>>>()
@@ -29,10 +29,6 @@ class TowerData: Cloneable {
     enum class RuleType {
         FLOOR,
         WAVE
-    }
-
-    fun isExistFloor(floorNum: Int): Boolean {
-        return floors.containsKey(floorNum)
     }
 
     fun randomFloor(floorNum: Int): FloorData {

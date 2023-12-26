@@ -4,7 +4,7 @@ import org.bukkit.entity.Player
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.tororopluginapi.sEvent.SEvent
 
-abstract class AbstractPark(val category: String, val char: Char) {
+abstract class AbstractPark(val category: String, val texture: Skill) {
 
     val sEvent = SEvent(DungeonTower.plugin)
 
@@ -14,6 +14,8 @@ abstract class AbstractPark(val category: String, val char: Char) {
 
     abstract fun getSkillDescription(): List<String>
 
-    abstract fun registerSkill(p: Player)
+    open fun registerSkill(p: Player) {}
+
+    open fun onAction(p: Player, action: ActionType) {}
 
 }

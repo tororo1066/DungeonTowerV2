@@ -75,7 +75,7 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
                                         }
 
                                         newItems.add(createInputItem(SItem(Material.EMERALD_BLOCK).setDisplayName("§a追加")
-                                            .addLore("§a合計の確率:${data.floors[int]!!.sumOf { sum -> sum.first }}/1000000"),String::class.java,"§dフロア名を入れてください",true) { str, _ ->
+                                            .addLore("§a合計の確率:${data.floors[int]!!.sumOf { sum -> sum.first }}/1000000"),String::class.java,"§dフロア名を入れてください", invOpenCancel = true) { str, _ ->
                                             val floor = DungeonTower.floorData[str]
                                             if (floor == null){
                                                 p.sendPrefixMsg(SStr("&cフロアが存在しません"))

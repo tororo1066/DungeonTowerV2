@@ -19,7 +19,9 @@ import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.data.FloorData
 import tororo1066.dungeontower.data.PartyData
 import tororo1066.dungeontower.data.TowerData
-import tororo1066.dungeontower.sql.TowerLogDB
+import tororo1066.dungeontower.logging.TowerLogDB
+import tororo1066.dungeontower.skilltree.AbstractPark
+import tororo1066.dungeontower.skilltree.ActionType
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.utils.DateType
 import tororo1066.tororopluginapi.utils.toJPNDateStr
@@ -32,7 +34,6 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
 
     var nowFloorNum = 1
     lateinit var nowFloor: FloorData
-    lateinit var nextFloor: FloorData
     private val nextFloorPlayers = HashMap<FloorData, ArrayList<UUID>>()
     private val goalPlayers = ArrayList<UUID>()
     private val moveLockPlayers = ArrayList<UUID>()
@@ -51,13 +52,6 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
         interrupt()
     }
 
-    private fun generateNextFloor(){
-        if (tower.isExistFloor(nowFloorNum + 1)){
-            nextFloor = tower.randomFloor(nowFloorNum + 1)
-            nextFloor.generateFloor()
-        }
-    }
-
     override fun run() {
         if (party.players.size == 0)return
         TowerLogDB.insertPartyData(party)
@@ -72,9 +66,12 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
         runTask {
             nowFloor.generateFloor()
             nowFloor.activate()
+
+            party.smokeStan(60)
+            party.teleport(nowFloor.preventFloorStairs.random().add(0.0,1.0,0.0))
+            party.invokePark(ActionType.ENTER_DUNGEON)
+            party.invokePark(ActionType.ENTER_FLOOR)
         }
-        runTask { party.smokeStan(60) }
-        runTask { party.teleport(nowFloor.preventFloorStairs.random().add(0.0,1.0,0.0)) }
         callCommand(nowFloor)
         //eventでthreadをlockするの使わないで
         sEvent.register(PlayerDeathEvent::class.java){ e ->
@@ -89,6 +86,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
             nextFloorPlayers.entries.removeIf { it.value.contains(e.player.uniqueId) }
             clearDungeonItems(e.player)
             data.isAlive = false
+            data.invokePark(ActionType.DIE)
             party.broadCast(SStr("&c&l${e.player.name}が死亡した..."))
             e.player.spigot().respawn()
             for (p in party.players) {
@@ -125,6 +123,8 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
             if (!party.players.containsKey(e.player.uniqueId))return@register
             nextFloorPlayers.entries.removeIf { it.value.contains(e.player.uniqueId) }
             clearDungeonItems(e.player)
+            val data = party.players[e.player.uniqueId]!!
+            data.invokePark(ActionType.DIE)
             if (party.parent == e.player.uniqueId){
                 val randomParent = party.players.entries.filter { it.key != e.player.uniqueId }.randomOrNull()?.key
                 if (randomParent != null){
@@ -142,7 +142,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
             e.player.teleport(DungeonTower.lobbyLocation)
 
             if (party.alivePlayers.isEmpty()){
-                party.broadCast(SStr("&c生きているプレイヤーが退出したため負けになりました"))
+                party.broadCast(SStr("&c生きているプレイヤーが退出したため敗北扱いになりました"))
                 TowerLogDB.quitDisbandDungeon(party, tower.internalName)
                 end(delay = 0)
                 return@register

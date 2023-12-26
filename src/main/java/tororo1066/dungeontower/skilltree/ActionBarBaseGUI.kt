@@ -17,7 +17,7 @@ import tororo1066.dungeontower.skilltree.parks.convenience.JustGuard
 import java.time.Duration
 import kotlin.math.abs
 
-open class ActionBarBaseGUI(val p: Player): Listener {
+open class ActionBarBaseGUI(val p: Player, val menuChar: Char): Listener {
 
     var initYaw = 0f
     var initPitch = 0f
@@ -26,6 +26,9 @@ open class ActionBarBaseGUI(val p: Player): Listener {
     lateinit var runnable: BukkitRunnable
 
     val items = HashMap<ParkLocation, AbstractPark>()
+    val largeItems = HashMap<ParkLocation, AbstractPark>()
+    val middleItems = HashMap<ParkLocation, AbstractPark>()
+    val smallItems = HashMap<ParkLocation, AbstractPark>()
 
     var onCursor: ((Int, Int) -> Component)? = { x, y ->
         val park = items.entries.find { it.key.xLocation.contains(x) && it.key.yLocation.contains(y) }?.value
@@ -33,9 +36,9 @@ open class ActionBarBaseGUI(val p: Player): Listener {
             val builder = StringBuilder()
             for (i in 1..abs(xLocation)) {
                 if (xLocation > 0) {
-                    builder.append(" ")
+                    builder.append("  ")
                 } else {
-                    builder.append("«")
+                    builder.append("««")
                 }
             }
             builder.append(park.getSkillName())
@@ -47,13 +50,25 @@ open class ActionBarBaseGUI(val p: Player): Listener {
     }
     var onClick: ((Int, Int) -> Unit)? = { x, y ->
         val park = items.entries.find { it.key.xLocation.contains(x) && it.key.yLocation.contains(y) }?.value
-        park?.registerSkill(p)
+        if (park != null){
+            DungeonTower.parkDB.loadAsync(p.uniqueId).thenAcceptAsync {
+                if (it.containsKey(park.javaClass.simpleName)){
+                    p.sendMessage("§c既に習得しています")
+                    return@thenAcceptAsync
+                }
+            }
+        }
     }
 
-    private fun registerItems(vararg items: AbstractPark){
+    protected fun registerItems(vararg items: AbstractPark){
         for (item in items){
             val location = item.getLocation()
             this.items[location] = item
+            when(item.texture.type) {
+                Type.LARGE -> largeItems[location] = item
+                Type.MIDDLE -> middleItems[location] = item
+                Type.SMALL -> smallItems[location] = item
+            }
         }
     }
 
@@ -101,12 +116,12 @@ open class ActionBarBaseGUI(val p: Player): Listener {
                     }
                 }
                 xLocation = if (yawDiff >= 0) i else -i
-                val component = text("                 ¡¢\uE028")
+                val component = text("                 ¡¢${menuChar}")
                     .font(Key.key("custom_ui_save"))
                     .color(TextColor.color(78, 92, 36))
                     .append(
-                        //                                                                                        小(上)        小(下)     中(1)           小(中)         大(1)        中(2)              小(中)   大(2)            小(中)         中(3)        小(下)        小(上)
-                        text("««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««»»¬\uE02E«««««»¬\uE030«««»\uE02B«««««««««»\uE02F«««««««»\uE029««««««\uE02C««««««««««««¬\uE02F««\uE02A««««««««««««\uE02F«««««««\uE02D««««««»\uE030«««««»¬\uE02E                                   ")
+                        //                                                                                        小(上)        小(下)     中(1)           小(中)         大(1)                                       中(2)              小(中)   大(2)                                             小(中)         中(3)        小(下)        小(上)
+                        text("««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««»»¬\uE02E«««««»¬\uE030«««»\uE02B«««««««««»\uE02F«««««««»${largeItems.getCharForIndex(0)}««««««\uE02C««««««««««««¬\uE02F««${largeItems.getCharForIndex(1)}««««««««««««\uE02F«««««««\uE02D««««««»\uE030«««««»¬\uE02E                                   ")
                             .font(Key.key("custom_ui_save"))
                             .color(TextColor.color(255, 255, 255))
                     )
@@ -127,6 +142,10 @@ open class ActionBarBaseGUI(val p: Player): Listener {
     fun stop(){
         runnable.cancel()
         HandlerList.unregisterAll(this)
+    }
+
+    private fun HashMap<ParkLocation, AbstractPark>.getCharForIndex(index: Int): Char {
+        return this.toList()[index].second.texture.char
     }
 
 

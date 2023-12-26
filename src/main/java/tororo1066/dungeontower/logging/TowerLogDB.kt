@@ -1,6 +1,5 @@
-package tororo1066.dungeontower.sql
+package tororo1066.dungeontower.logging
 
-import com.mongodb.client.model.Filters
 import com.mongodb.client.model.Updates
 import org.bson.Document
 import tororo1066.dungeontower.DungeonTower
@@ -36,7 +35,7 @@ class TowerLogDB {
             ))
     }
 
-    companion object{
+    companion object {
 
         lateinit var database: SDatabase
         fun insertPartyData(partyData: PartyData) {

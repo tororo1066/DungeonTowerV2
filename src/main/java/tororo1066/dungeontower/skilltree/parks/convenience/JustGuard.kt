@@ -7,23 +7,22 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.player.PlayerToggleSneakEvent
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.skilltree.AbstractPark
-import tororo1066.dungeontower.skilltree.LargeSkill
+import tororo1066.dungeontower.skilltree.Skill
 import tororo1066.dungeontower.skilltree.ParkLocation
 
-class JustGuard: AbstractPark("convenience", LargeSkill.CONVENIENCE_1.char) {
+class JustGuard: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_1) {
 
     override fun getLocation(): ParkLocation {
         return ParkLocation(-7..-2, 20..24)
     }
 
     override fun getSkillName(): String {
-        return "§6§lJust Guard"
+        return "§6§lジャストガード"
     }
 
     override fun getSkillDescription(): List<String> {
         return listOf(
-            "§f攻撃を受けた時にしゃがむと",
-            "§fダメージを無効化できる",
+            "§fしゃがむと一瞬無敵になる",
             "§fクールタイム: 3秒"
         )
     }

@@ -6,19 +6,19 @@ enum class SkillMenu(val char: Char) {
     ATTACK('B')
 }
 
-enum class LargeSkill(val char: Char) {
-    CONVENIENCE_1('\uE029'),
-    CONVENIENCE_2('\uE02A'),
+enum class Skill(val char: Char, val type: Type) {
+    CONVENIENCE_LARGE_1('\uE029', Type.LARGE),
+    CONVENIENCE_LARGE_2('\uE02A', Type.LARGE),
+    CONVENIENCE_MIDDLE_1('\uE02B', Type.MIDDLE),
+    CONVENIENCE_MIDDLE_2('\uE02C', Type.MIDDLE),
+    CONVENIENCE_MIDDLE_3('\uE02D', Type.MIDDLE),
+    CONVENIENCE_SMALL_UP('\uE02E', Type.SMALL),
+    CONVENIENCE_SMALL_CENTER('\uE02F', Type.SMALL),
+    CONVENIENCE_SMALL_DOWN('\uE030', Type.SMALL),
 }
 
-enum class MiddleSkill(val char: Char) {
-    CONVENIENCE_1('\uE02B'),
-    CONVENIENCE_2('\uE02C'),
-    CONVENIENCE_3('\uE02D'),
-}
-
-enum class SmallSkill(val char: Char) {
-    CONVENIENCE_UP('\uE02E'),
-    CONVENIENCE_CENTER('\uE02F'),
-    CONVENIENCE_DOWN('\uE030'),
+enum class Type {
+    LARGE,
+    MIDDLE,
+    SMALL
 }

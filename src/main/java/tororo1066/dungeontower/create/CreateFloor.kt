@@ -217,7 +217,7 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
 
                     moveChildInventory(settingInv,p)
                 },
-            createInputItem(SItem(Material.OAK_PLANKS).setDisplayName("§6始点を変更する")
+            createNullableInputItem(SItem(Material.OAK_PLANKS).setDisplayName("§6始点を変更する")
                 .addLore("§d現在の値: ${data.parallelFloorOrigin?.toLocString(LocType.BLOCK_COMMA)}"),Location::class.java,"/<座標>") { location, _ ->
                    data.parallelFloorOrigin = location
             },
@@ -243,7 +243,7 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                                 .addLore("§a合計の確率:${data.subFloors.sumOf { sum -> sum.first }}/1000000"),
                                 String::class.java,
                                 "§dフロア名を入れてください",
-                                true
+                                invOpenCancel = true
                             ) { str, _ ->
                                 val floor = DungeonTower.floorData[str]
                                 if (floor == null) {
