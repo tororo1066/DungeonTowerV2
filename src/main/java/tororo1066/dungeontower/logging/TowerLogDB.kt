@@ -77,7 +77,7 @@ class TowerLogDB {
             }
         }
 
-        fun getTodayEntryCount(uuid: String, ip: String, dungeons: List<String>? = null): Int {
+        fun getTodayClearCount(uuid: String, ip: String, dungeons: List<String>? = null): Int {
             val time = Calendar.getInstance().apply {
                 set(Calendar.HOUR, 0)
                 set(Calendar.MINUTE, 0)

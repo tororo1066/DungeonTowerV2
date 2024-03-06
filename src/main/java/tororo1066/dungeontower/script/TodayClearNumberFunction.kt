@@ -11,7 +11,7 @@ import tororo1066.tororopluginapi.script.ScriptFile
 @FunctionParameter(name = "uuid")
 @FunctionParameter(name = "ip")
 @FunctionParameter(name = "dungeon", isVarArg = true)
-class TodayEntryNumberFunction: AbstractFunction() {
+class TodayClearNumberFunction: AbstractFunction() {
 
     override fun evaluate(
         expression: Expression,
@@ -21,14 +21,13 @@ class TodayEntryNumberFunction: AbstractFunction() {
         val dungeons = parameterValues.drop(2).map { it.stringValue }.let {
             it.ifEmpty { null }
         }
-        val log = TowerLogDB.getTodayEntryCount(parameterValues[0].stringValue, parameterValues[1].stringValue, dungeons)
+        val log = TowerLogDB.getTodayClearCount(parameterValues[0].stringValue, parameterValues[1].stringValue, dungeons)
         return EvaluationValue(log)
     }
 
     companion object {
         fun registerFunction(){
-            ScriptFile.configuration.functionDictionary
-                .addFunction("DT_TODAY_ENTRY", TodayEntryNumberFunction())
+            ScriptFile.functions["dt_today_clear"] = { TodayClearNumberFunction() }
         }
     }
 }

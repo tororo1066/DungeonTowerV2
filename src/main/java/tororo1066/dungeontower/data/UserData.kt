@@ -24,7 +24,7 @@ class UserData() {
     fun invokePark(actionType: ActionType){
         val p = uuid.toPlayer()?:return
         parks.values.forEach second@ { park ->
-            park.onAction(p, actionType)
+            park.onAction(p, actionType, this)
         }
     }
 }

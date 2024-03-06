@@ -1,16 +1,26 @@
 package tororo1066.dungeontower.skilltree.parks.convenience
 
 import org.bukkit.Bukkit
+import org.bukkit.Particle
 import org.bukkit.Sound
 import org.bukkit.entity.Player
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.player.PlayerToggleSneakEvent
+import org.bukkit.scheduler.BukkitTask
 import tororo1066.dungeontower.DungeonTower
+import tororo1066.dungeontower.data.UserData
 import tororo1066.dungeontower.skilltree.AbstractPark
 import tororo1066.dungeontower.skilltree.Skill
 import tororo1066.dungeontower.skilltree.ParkLocation
 
-class JustGuard: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_1) {
+class JustGuard: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_1, cost = 1,
+    blockedBy = listOf(OnceHeal::class.java)
+) {
+
+    var cooltime = 60L
+    var duration = 2L
+
+    private var _task: BukkitTask? = null
 
     override fun getLocation(): ParkLocation {
         return ParkLocation(-7..-2, 20..24)
@@ -22,12 +32,12 @@ class JustGuard: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_1) {
 
     override fun getSkillDescription(): List<String> {
         return listOf(
-            "§fしゃがむと一瞬無敵になる",
-            "§fクールタイム: 3秒"
+            "§7しゃがむと一瞬無敵になる",
+            "§7クールタイム: 3秒"
         )
     }
 
-    override fun registerSkill(p: Player) {
+    override fun registerPark(p: Player, userData: UserData) {
         var blocking = false
         var cooldown = false
         sEvent.register(PlayerToggleSneakEvent::class.java) { e ->
@@ -37,10 +47,10 @@ class JustGuard: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_1) {
                 blocking = true
                 Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
                     blocking = false
-                }, 2)
-                Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
+                }, duration)
+                _task = Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
                     cooldown = false
-                }, 60)
+                }, cooltime)
             }
         }
 
@@ -48,7 +58,11 @@ class JustGuard: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_1) {
             if (e.entity.uniqueId != p.uniqueId) return@register
             if (!blocking) return@register
             e.damage = 0.0
-            (e.entity as Player).playSound(e.entity.location, Sound.BLOCK_ANVIL_PLACE, 0.5f, 2f)
+            val player = e.entity as Player
+            player.playSound(e.entity.location, Sound.BLOCK_ANVIL_PLACE, 0.5f, 2f)
+            player.spawnParticle(Particle.TOTEM, e.entity.location, 10, 0.5, 0.5, 0.5, 0.1)
+            _task?.cancel()
+            cooldown = false
         }
     }
 }

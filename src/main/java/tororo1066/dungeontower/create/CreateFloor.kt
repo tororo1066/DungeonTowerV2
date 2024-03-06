@@ -18,6 +18,8 @@ import tororo1066.tororopluginapi.sItem.SItem
 import tororo1066.tororopluginapi.utils.LocType
 import tororo1066.tororopluginapi.utils.toLocString
 import java.io.File
+import kotlin.math.max
+import kotlin.math.min
 
 class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJavaPlugin.plugin, data.internalName) {
 
@@ -230,7 +232,7 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
 
                             data.subFloors.forEach {
                                 items.add(SInventoryItem(Material.REDSTONE_BLOCK)
-                                    .setDisplayName("§d確率:${it.first}/1000000§f,§6フロア:${it.second.internalName}")
+                                    .setDisplayName("§d確率:${it.first}/1000000§f,§6フロア:${it.second}")
                                     .addLore("§cシフト左クリックで削除")
                                     .setCanClick(false).setClickEvent second@ { e ->
                                         if (e.click != ClickType.SHIFT_LEFT)return@second
@@ -245,8 +247,7 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                                 "§dフロア名を入れてください",
                                 invOpenCancel = true
                             ) { str, _ ->
-                                val floor = DungeonTower.floorData[str]
-                                if (floor == null) {
+                                if (!DungeonTower.floorData.containsKey(str)) {
                                     p.sendPrefixMsg(SStr("&cフロアが存在しません"))
                                     open(p)
                                     return@createInputItem
@@ -256,7 +257,7 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                                     Int::class.java,
                                     "§d確率を入れてください"
                                 ) { chance ->
-                                    data.subFloors.add(Pair(chance, floor.newInstance()))
+                                    data.subFloors.add(Pair(chance, str))
                                     open(p)
                                 }
                             })
@@ -267,7 +268,13 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                     }
 
                     moveChildInventory(settingInv,p)
-                }
+                },
+            SInventoryItem(Material.REPEATING_COMMAND_BLOCK).setDisplayName("§aセーブデータを使用する")
+                .addLore("§d現在の値: ${data.shouldUseSaveData}").setCanClick(false)
+                .setClickEvent {
+                    data.shouldUseSaveData = !data.shouldUseSaveData
+                    allRenderMenu(p)
+                },
         )
 
         if (isEdit){
@@ -298,12 +305,15 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
 
     private fun save(p: Player){
 
-        if (data.startLoc.blockX >= data.endLoc.blockX){
-            val startLoc = data.startLoc.clone()
-            val endLoc = data.endLoc.clone()
-            data.startLoc = endLoc
-            data.endLoc = startLoc
-        }
+        val minX = min(data.startLoc.x,data.endLoc.x)
+        val minY = min(data.startLoc.y,data.endLoc.y)
+        val minZ = min(data.startLoc.z,data.endLoc.z)
+        val maxX = max(data.startLoc.x,data.endLoc.x)
+        val maxY = max(data.startLoc.y,data.endLoc.y)
+        val maxZ = max(data.startLoc.z,data.endLoc.z)
+
+        data.startLoc.set(minX,minY,minZ)
+        data.endLoc.set(maxX,maxY,maxZ)
 
         val config = SJavaPlugin.sConfig.getConfig("floors/${data.internalName}")?: YamlConfiguration()
         config.set("startLoc",data.startLoc.toLocString(LocType.BLOCK_COMMA))
@@ -324,7 +334,8 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
         config.set("clearTasks",clearTasks)
         config.set("joinCommands",data.joinCommands)
         config.set("parallelFloorOrigin",data.parallelFloorOrigin?.toLocString(LocType.BLOCK_COMMA))
-        config.set("subFloors",data.subFloors.map { "${it.first},${it.second.internalName}" })
+        config.set("subFloors",data.subFloors.map { "${it.first},${it.second}" })
+        config.set("shouldUseSaveData",data.shouldUseSaveData)
 
         if (SJavaPlugin.sConfig.saveConfig(config,"floors/${data.internalName}")){
             data.yml = config

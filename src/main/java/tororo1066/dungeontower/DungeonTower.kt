@@ -1,5 +1,6 @@
 package tororo1066.dungeontower
 
+import com.elmakers.mine.bukkit.api.magic.MagicAPI
 import io.lumine.mythic.bukkit.BukkitAPIHelper
 import org.bukkit.Bukkit
 import org.bukkit.Location
@@ -10,9 +11,10 @@ import org.bukkit.event.player.PlayerQuitEvent
 import tororo1066.dungeontower.command.DungeonCommand
 import tororo1066.dungeontower.command.DungeonTaskCommand
 import tororo1066.dungeontower.data.*
-import tororo1066.dungeontower.script.TodayEntryNumberFunction
-import tororo1066.dungeontower.skilltree.ParkDatabase
+import tororo1066.dungeontower.script.TodayClearNumberFunction
 import tororo1066.dungeontower.logging.TowerLogDB
+import tororo1066.dungeontower.save.SaveDataDB
+import tororo1066.dungeontower.script.FloorScript
 import tororo1066.tororopluginapi.SInput
 import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
@@ -34,13 +36,11 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
         lateinit var dungeonWorld: World
         lateinit var floorWorld: World
 
-        var createFloorNow = false //フロアが作成中かどうか 作成中は処理を一時停止する
-
         val prefix = SStr("&b[&4Dungeon&cTower&b]&r")
         lateinit var mythic: BukkitAPIHelper //スポナーでmmのmobを湧かすために使用
+        lateinit var magicAPI: MagicAPI //魔法API
         lateinit var sInput: SInput //入力マネージャー
         lateinit var util: UsefulUtility
-        lateinit var parkDB: ParkDatabase
 
         val lootData = HashMap<String,LootData>() //宝箱のデータ
         val spawnerData = HashMap<String,SpawnerData>() //スポナーのデータ
@@ -94,13 +94,15 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
 
             DungeonCommand()
             TowerLogDB()
-            parkDB = ParkDatabase()
+            SaveDataDB
+            FloorScript.load()
         }
     }
 
     override fun onStart() {
         plugin = this
         mythic = BukkitAPIHelper()
+        magicAPI = Bukkit.getPluginManager().getPlugin("Magic") as MagicAPI
         sInput = SInput(this)
         util = UsefulUtility(this)
         reloadDungeonConfig()
@@ -109,7 +111,8 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
         getCommand("dungeontask")?.tabCompleter = dungeonTaskCommand
         DungeonCommand()
         TowerLogDB()
-        TodayEntryNumberFunction.registerFunction()
+        TodayClearNumberFunction.registerFunction()
+        FloorScript.load()
 
         SEvent(this).register(PlayerQuitEvent::class.java,EventPriority.LOWEST) { e ->
             if (playNow.contains(e.player.uniqueId))return@register
@@ -121,6 +124,6 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
             partiesData.remove(e.player.uniqueId)
         }
 
-        server.messenger.registerOutgoingPluginChannel(this,"tororo:dungeontower")
+        server.messenger.registerOutgoingPluginChannel(this, "tororo:dungeontower")
     }
 }

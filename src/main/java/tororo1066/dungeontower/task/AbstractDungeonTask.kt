@@ -147,8 +147,8 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
                 if (p?.gameMode == GameMode.SPECTATOR){
                     p.spectatorTarget = null
                     p.gameMode = GameMode.SURVIVAL
-                    p.teleport(DungeonTower.lobbyLocation)
                 }
+                p?.teleport(DungeonTower.lobbyLocation)
                 DungeonTower.partiesData.remove(uuid)
                 DungeonTower.playNow.remove(uuid)
             }
@@ -167,7 +167,7 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
             return world.name == p.world.name && x.contains(p.location.blockX) && y.contains(p.location.blockY) && z.contains(p.location.blockZ)
         }
 
-        mainFloor.parallelFloors.forEach { parallel ->
+        mainFloor.parallelFloors.values.forEach { parallel ->
             if (check(parallel)){
                 return parallel
             }

@@ -20,7 +20,6 @@ import tororo1066.dungeontower.data.FloorData
 import tororo1066.dungeontower.data.PartyData
 import tororo1066.dungeontower.data.TowerData
 import tororo1066.dungeontower.logging.TowerLogDB
-import tororo1066.dungeontower.skilltree.AbstractPark
 import tororo1066.dungeontower.skilltree.ActionType
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.utils.DateType
@@ -30,9 +29,9 @@ import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 
-class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(party, tower) {
+class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<FloorData, Int>? = null): AbstractDungeonTask(party, tower) {
 
-    var nowFloorNum = 1
+    var nowFloorNum = firstFloor?.second?:1
     lateinit var nowFloor: FloorData
     private val nextFloorPlayers = HashMap<FloorData, ArrayList<UUID>>()
     private val goalPlayers = ArrayList<UUID>()
@@ -42,6 +41,8 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
     private var end = false
     private var unlockedChest = false
     private var createFloorNow = false
+
+    private val rootParent = party.parent
 
     override fun onEnd(){
         nowFloor.removeFloor()
@@ -58,17 +59,16 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
         TowerLogDB.enterDungeon(party, tower.internalName)
         party.nowTask = this
         party.broadCast(SStr("&c${tower.name}&aにテレポート中..."))
-        nowFloor = tower.randomFloor(nowFloorNum)
+        nowFloor = firstFloor?.first?:tower.randomFloor()
 
-        while (DungeonTower.createFloorNow){
-            sleep(1)
-        }
+        nowFloor.generateFloor(tower, nowFloorNum, rootParent).join()
+
         runTask {
-            nowFloor.generateFloor()
             nowFloor.activate()
 
             party.smokeStan(60)
             party.teleport(nowFloor.preventFloorStairs.random().add(0.0,1.0,0.0))
+            party.registerPark()
             party.invokePark(ActionType.ENTER_DUNGEON)
             party.invokePark(ActionType.ENTER_FLOOR)
         }
@@ -115,10 +115,12 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
                 end()
             }
         }
+
         sEvent.register(PlayerStopSpectatingEntityEvent::class.java){ e ->
             if (!party.players.containsKey(e.player.uniqueId))return@register
             e.isCancelled = true
         }
+
         sEvent.register(PlayerQuitEvent::class.java){ e ->
             if (!party.players.containsKey(e.player.uniqueId))return@register
             nextFloorPlayers.entries.removeIf { it.value.contains(e.player.uniqueId) }
@@ -148,11 +150,13 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
                 return@register
             }
         }
+
         sEvent.register(PlayerVelocityEvent::class.java){ e ->
             if (moveLockPlayers.contains(e.player.uniqueId)){
                 e.isCancelled = true
             }
         }
+
         sEvent.register(PlayerMoveEvent::class.java){ e ->
             if (moveLockPlayers.contains(e.player.uniqueId)){
                 e.isCancelled = true
@@ -162,7 +166,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
             if (!party.players.containsKey(e.player.uniqueId))return@register
             nextFloorPlayers.entries.removeIf { it.value.contains(e.player.uniqueId) }
             when(e.to.clone().subtract(0.0,1.0,0.0).block.type){
-                Material.WARPED_STAIRS->{
+                Material.WARPED_STAIRS -> {
                     val floor = getInFloor(nowFloor, e.player)?:return@register
                     if (!floor.checkClear())return@register
                     if (nextFloorPlayers.containsKey(floor)){
@@ -177,15 +181,12 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
                             moveLockPlayers.add(it)
                         }
                         party.broadCast(SStr("&7転移中..."))//메시지
-                        Bukkit.getScheduler().runTaskAsynchronously(DungeonTower.plugin, Runnable {
-                            nowFloorNum++
-                            val preventFloor = nowFloor
-                            nowFloor = floor.randomFloor()
-                            while (DungeonTower.createFloorNow){
-                                sleep(1)
-                            }
-                            Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
-                                nowFloor.generateFloor()
+
+                        nowFloorNum++
+                        val preventFloor = nowFloor
+                        nowFloor = floor.randomSubFloor()
+                        nowFloor.generateFloor(tower, nowFloorNum, rootParent).thenAccept {
+                            DungeonTower.util.runTask {
                                 nowFloor.activate()
                                 party.smokeStan(60)
                                 unlockedChest = false
@@ -196,11 +197,11 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
                                     moveLockPlayers.remove(it)
                                 }
                                 createFloorNow = false
-                            })
-                        })
+                            }
+                        }
                     }
                 }
-                Material.DIAMOND_BLOCK->{
+                Material.DIAMOND_BLOCK -> {
                     val floor = getInFloor(nowFloor, e.player)?:return@register
                     if (!floor.checkClear())return@register
                     goalPlayers.add(e.player.uniqueId)
@@ -269,9 +270,9 @@ class DungeonTowerTask(party: PartyData, tower: TowerData): AbstractDungeonTask(
                 }
 
                 nowFloor.parallelFloors.forEach { floor ->
-                    floor.clearTask.forEach second@ { task ->
+                    floor.value.clearTask.forEach second@ { task ->
                         if (task.scoreboardName.isBlank()) return@second
-                        obj.getScore(formatTask(floor, task)).score = scoreInt
+                        obj.getScore(formatTask(floor.value, task)).score = scoreInt
                     }
                 }
 

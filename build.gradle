@@ -31,13 +31,20 @@ repositories {
         url = 'https://maven.enginehub.org/repo/'
     }
     maven { url 'https://repo1.maven.org/maven2/' }
+    maven {
+        url = uri('https://maven.pkg.github.com/tororo1066/TororoPluginAPI')
+        credentials {
+            username = System.getenv('GITHUB_USERNAME')
+            password = System.getenv('GITHUB_TOKEN')
+        }
+    }
 }
 
 dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.19.3-R0.1-SNAPSHOT'
     compileOnly "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     api fileTree(dir: 'libs', include: '*.jar')
-    api 'com.github.tororo1066.TororoPluginAPI:TororoPluginAPI:9809adc5e7'
+    api 'tororo1066:tororopluginapi:5fd6bdf'
     compileOnly "io.lumine:Mythic-Dist:5.0.4-SNAPSHOT"
     compileOnly 'com.sk89q.worldedit:worldedit-bukkit:7.2.9'
     compileOnly 'com.elmakers.mine.bukkit:MagicAPI:10.2'

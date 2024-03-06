@@ -16,6 +16,7 @@ import tororo1066.dungeontower.create.CreateSpawner
 import tororo1066.dungeontower.data.*
 import tororo1066.dungeontower.inventory.RuleInventory
 import tororo1066.dungeontower.skilltree.ActionBarBaseGUI
+import tororo1066.dungeontower.skilltree.ConvenienceGUI
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.annotation.SCommandBody
 import tororo1066.tororopluginapi.otherClass.StrExcludeFileIllegalCharacter
@@ -28,18 +29,20 @@ import tororo1066.tororopluginapi.utils.sendMessage
 import tororo1066.tororopluginapi.utils.toLocString
 import tororo1066.tororopluginapi.utils.toPlayer
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 
 class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon.user") {
 
     companion object{
         val accepts = HashMap<UUID,ArrayList<UUID>>()
+        val entryCooldown = ArrayList<UUID>()
     }
 
     init {
         setCommandNoFoundEvent {
             showHelp(it.sender,it.label)
         }
-        registerDebugCommand("dungeon.user")
+        registerDebugCommand("dungeon.op")
     }
 
     private fun CommandSender.checkIllegal(string: String): Boolean {
@@ -76,6 +79,10 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
 
     @SCommandBody
     val entryTower = command().addArg(SCommandArg("entry")).addArg(SCommandArg(DungeonTower.towerData.keys)).setPlayerExecutor {
+        if (entryCooldown.contains(it.sender.uniqueId)){
+            it.sender.sendPrefixMsg(SStr("&c少し待ってから実行してください"))
+            return@setPlayerExecutor
+        }
         if (DungeonTower.playNow.contains(it.sender.uniqueId)){
             it.sender.sendPrefixMsg(SStr("&cダンジョンに参加しています"))
             return@setPlayerExecutor
@@ -92,14 +99,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
         val tower = DungeonTower.towerData[it.args[1]]!!
         val partyData = DungeonTower.partiesData[it.sender.uniqueId]!!
 
-        if (!tower.canChallenge(it.sender,partyData))return@setPlayerExecutor
-
-        val task = DungeonTowerTask(partyData, tower)
-        partyData.players.keys.forEach { uuid ->
-            DungeonTower.playNow.add(uuid)
-        }
-        //playNow書き込み パーティ削除？
-        task.start()//仮置き
+        tower.entryTower(it.sender,partyData)
     }
 
     @SCommandBody
@@ -507,8 +507,8 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
     lateinit var actionBarBaseGUI: ActionBarBaseGUI
 
     @SCommandBody("dungeon.op")
-    val testGUI3 = command().addArg(SCommandArg("test3")).setPlayerExecutor {
-        actionBarBaseGUI = ActionBarBaseGUI(it.sender)
+    val testGUI3 = command().addArg(SCommandArg("test3")).addArg(SCommandArg(DungeonTower.towerData.keys)).setPlayerExecutor {
+        actionBarBaseGUI = ConvenienceGUI(it.sender, DungeonTower.towerData[it.args[1]]!!)
         actionBarBaseGUI.show()
     }
 

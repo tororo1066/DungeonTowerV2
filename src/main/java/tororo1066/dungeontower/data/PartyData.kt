@@ -55,6 +55,14 @@ class PartyData: Cloneable {
         }
     }
 
+    fun registerPark(){
+        players.values.forEach {
+            it.parks.values.forEach second@ { park ->
+                park.registerPark(it.uuid.toPlayer()?:return@forEach, it)
+            }
+        }
+    }
+
     fun invokePark(actionType: ActionType){
         players.values.forEach {
             it.invokePark(actionType)

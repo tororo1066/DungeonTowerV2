@@ -8,6 +8,7 @@ import org.bukkit.entity.Player
 import org.bukkit.inventory.meta.PotionMeta
 import org.bukkit.persistence.PersistentDataType
 import tororo1066.dungeontower.DungeonTower
+import tororo1066.dungeontower.data.UserData
 import tororo1066.dungeontower.skilltree.AbstractPark
 import tororo1066.dungeontower.skilltree.ActionType
 import tororo1066.dungeontower.skilltree.ParkLocation
@@ -15,13 +16,15 @@ import tororo1066.dungeontower.skilltree.Skill
 import tororo1066.tororopluginapi.sItem.SInteractItemManager
 import tororo1066.tororopluginapi.sItem.SItem
 
-class OnceHeal: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_2) {
+class OnceHeal: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_2, cost = 1,
+    blockedBy = listOf(JustGuard::class.java)
+) {
 
-    val interactManager = SInteractItemManager(DungeonTower.plugin)
-    val healAmount = 5.0
+    private val interactManager = SInteractItemManager(DungeonTower.plugin)
+    var healAmount = 10.0
 
     override fun getLocation(): ParkLocation {
-        return ParkLocation(0..6, 25..29)
+        return ParkLocation(0..6, 20..24)
     }
 
     override fun getSkillName(): String {
@@ -30,13 +33,16 @@ class OnceHeal: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_2) {
 
     override fun getSkillDescription(): List<String> {
         return listOf(
-
+            "§7フロアごとに1度だけ体力を回復できるアイテムを手に入れる",
+            "§7既に持っている場合は手に入れられない",
+            "§7回復量: §c${healAmount.toInt()}"
         )
     }
 
-    override fun onAction(p: Player, action: ActionType) {
+    override fun onAction(p: Player, action: ActionType, userData: UserData) {
         when(action) {
             ActionType.ENTER_FLOOR -> {
+                if (p.itemOnCursor.itemMeta?.persistentDataContainer?.has(NamespacedKey(DungeonTower.plugin, "once_heal"), PersistentDataType.INTEGER) == true) return
                 if (p.inventory.any { it?.itemMeta?.persistentDataContainer?.has(NamespacedKey(DungeonTower.plugin, "once_heal"), PersistentDataType.INTEGER) == true }) return
                 val item = SItem(Material.SPLASH_POTION)
                     .setDisplayName("§c§l治癒の風")
@@ -53,7 +59,9 @@ class OnceHeal: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_2) {
                     }
                     player.health += healAmount
                     player.sendMessage("§c体力が回復した...")
-                    interactItem.amount -= 1
+                    e.item?.amount = 0
+                    interactItem.delete()
+
                     return@setInteractEvent true
                 }
 

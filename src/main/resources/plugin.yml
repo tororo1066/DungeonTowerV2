@@ -6,7 +6,10 @@ api-version: 1.17
 depend:
   - MythicMobs
   - WorldEdit
+  - Magic
 softdepend:
+  - TororoPluginAPI
+  - NMSUtils
   - Multiverse-Core
   - Multiverse-Portals
   - MultiWorld
