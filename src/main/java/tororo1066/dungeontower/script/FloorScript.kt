@@ -30,7 +30,6 @@ object FloorScript {
         return UsefulUtility.sTry({
             Expression("loadPriority()", scriptFile.configuration).evaluate()?.numberValue?.toInt() ?: 0
         }, {
-            it.printStackTrace()
             0
         })
     }
@@ -38,11 +37,8 @@ object FloorScript {
     fun getLabelName(script: String): String? {
         val scriptFile = scripts[script] ?: return null
         return UsefulUtility.sTry({
-            val value = Expression("label()", scriptFile.configuration).evaluate()?.stringValue
-            Bukkit.broadcastMessage(value.toString())
-            value
+            Expression("label()", scriptFile.configuration).evaluate()?.stringValue
         }, {
-            it.printStackTrace()
             null
         })
     }
@@ -59,11 +55,15 @@ object FloorScript {
         script ?: return floorName to rotate
         val scriptFile = scripts[script] ?: return floorName to rotate
         scriptFile.debug = true
-        scriptFile.publicVariables["towerName"] = towerName
-        scriptFile.publicVariables["floorName"] = floorName
-        scriptFile.publicVariables["willGenerateFloors"] = willGenerateFloors
-        scriptFile.publicVariables["noGenerateFloors"] = noGenerateFloors
-        scriptFile.publicVariables["generate"] = generate
+
+        scriptFile.publicVariables.run {
+            put("towerName", towerName)
+            put("floorName", floorName)
+            put("rotate", rotate)
+            put("willGenerateFloors", willGenerateFloors)
+            put("noGenerateFloors", noGenerateFloors)
+            put("generate", generate)
+        }
         val result = scriptFile.start()
         if (result is String) {
             val split = result.split(",")

@@ -1,7 +1,5 @@
 package tororo1066.dungeontower.data
 
-import com.google.gson.Gson
-import com.google.gson.JsonObject
 import com.sk89q.worldedit.WorldEdit
 import com.sk89q.worldedit.bukkit.BukkitWorld
 import com.sk89q.worldedit.extent.clipboard.BlockArrayClipboard
@@ -22,7 +20,6 @@ import org.bukkit.block.data.Directional
 import org.bukkit.block.data.type.EndPortalFrame
 import org.bukkit.block.data.type.Stairs
 import org.bukkit.configuration.file.YamlConfiguration
-import org.bukkit.entity.Player
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.loot.LootContext
 import org.bukkit.persistence.PersistentDataType
@@ -31,14 +28,14 @@ import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.save.SaveDataDB
 import tororo1066.dungeontower.script.FloorScript
 import tororo1066.tororopluginapi.sEvent.SEvent
-import tororo1066.tororopluginapi.utils.LocType
-import tororo1066.tororopluginapi.utils.toLocString
 import java.io.File
-import java.util.*
+import java.util.Random
+import java.util.UUID
 import java.util.concurrent.CompletableFuture
-import kotlin.collections.ArrayList
-import kotlin.collections.HashMap
-import kotlin.math.*
+import kotlin.math.cos
+import kotlin.math.min
+import kotlin.math.sign
+import kotlin.math.sin
 import kotlin.random.nextInt
 
 class FloorData: Cloneable {
@@ -90,6 +87,7 @@ class FloorData: Cloneable {
 
     val parallelFloors = HashMap<String, FloorData>()
     var parallelFloor = false
+    var rotate = 0.0
     var parallelFloorOrigin: Location? = null
     lateinit var parent: FloorData
 
@@ -325,7 +323,7 @@ class FloorData: Cloneable {
                 }
                 .createPaste(it)
                 .to(buildLocation.toBlockVector3())
-                .ignoreAirBlocks(false)
+                .ignoreAirBlocks(true)
                 .build()
             Operations.complete(operation)
         }
@@ -381,17 +379,13 @@ class FloorData: Cloneable {
                                     )
                                 }
                                 "floor" -> {
-                                    val split = data.getLine(2).split(",")
-                                    val rotate = split.getOrNull(1)?.toDoubleOrNull() ?: 0.0
-                                    var label = data.getLine(3)
-                                    if (label.isBlank()) {
-                                        label = "${x},${y},${z}"
-                                    }
+                                    val script = data.getLine(3).ifBlank { null }
+                                    val label = script?.let { let -> FloorScript.getLabelName(let) } ?: "${x},${y},${z}"
                                     if (parallelFloors.containsKey(label)) {
-                                        val floor = parallelFloors[label]!!.newInstance()
+                                        val floor = parallelFloors[label]!!
                                         floor.parent = this
                                         floor.parallelFloor = true
-                                        floor.noLoadGenerateFloor(placeLoc, rotate)
+                                        floor.noLoadGenerateFloor(placeLoc, floor.rotate)
                                     }
                                 }
                                 else -> {}
@@ -467,7 +461,7 @@ class FloorData: Cloneable {
                 }
                 .createPaste(it)
                 .to(buildLocation.toBlockVector3())
-                .ignoreAirBlocks(false)
+                .ignoreAirBlocks(true)
                 .build()
             Operations.complete(operation)
         }
@@ -540,8 +534,7 @@ class FloorData: Cloneable {
                                         )
                                     )
 
-//                                    parallelFloors[label] = floor
-//                                    floor.generateFloor(placeLoc, rotate)
+                                    placeLoc.block.type = Material.AIR
                                 }
                                 else -> {}
                             }
@@ -578,6 +571,7 @@ class FloorData: Cloneable {
             val floorData = DungeonTower.floorData[floorName]?.newInstance() ?: return@forEach
             floorData.parallelFloor = true
             floorData.parent = this
+            floorData.rotate = rotate
             parallelFloors[data.label] = floorData
             floorData.generateFloor(towerData, data.location, rotate)
         }
@@ -754,6 +748,7 @@ class FloorData: Cloneable {
         val map = HashMap<String,Any>()
         map["parallelFloors"] = parallelFloors.entries.associate { it.key to it.value.toMap() }
         map["internalName"] = internalName
+        map["rotate"] = rotate
         return map
     }
 
@@ -762,11 +757,13 @@ class FloorData: Cloneable {
         if (internalName != map["internalName"])return false
         map["parallelFloors"]?.let {
             (it as Map<String,Any>).forEach { (key, value) ->
-                parallelFloors[key] = DungeonTower.floorData[key]!!.newInstance().apply {
-                    loadData(value as Map<String, Any>)
+                value as Map<String,Any>
+                parallelFloors[key] = DungeonTower.floorData[value["internalName"].toString()]!!.newInstance().apply {
+                    loadData(value)
                 }
             }
         }
+        rotate = map["rotate"] as Double
         loadedSaveData = true
         return true
     }

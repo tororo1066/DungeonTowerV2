@@ -71,5 +71,10 @@
       <option name="name" value="maven3" />
       <option name="url" value="https://repo.onarandombox.com/content/groups/public/" />
     </remote-repository>
+    <remote-repository>
+      <option name="id" value="maven4" />
+      <option name="name" value="maven4" />
+      <option name="url" value="https://maven.pkg.github.com/tororo1066/TororoPluginAPI" />
+    </remote-repository>
   </component>
 </project>
