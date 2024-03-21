@@ -46,8 +46,10 @@ object FloorScript {
     fun generateSubFloorScript(
         towerName: String,
         floorName: String,
+        parent: Map<String, Any?>,
         script: String?,
         rotate: Double,
+        generateStep: Int,
         willGenerateFloors: List<String>,
         noGenerateFloors: List<String>,
         generate: Boolean
@@ -60,9 +62,11 @@ object FloorScript {
             put("towerName", towerName)
             put("floorName", floorName)
             put("rotate", rotate)
+            put("generateStep", generateStep)
             put("willGenerateFloors", willGenerateFloors)
             put("noGenerateFloors", noGenerateFloors)
             put("generate", generate)
+            put("parent", parent)
         }
         val result = scriptFile.start()
         if (result is String) {

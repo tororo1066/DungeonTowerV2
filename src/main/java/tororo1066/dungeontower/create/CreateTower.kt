@@ -99,6 +99,15 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
                     }
                 }
                 moveChildInventory(inv,e.whoClicked as Player)
+            },
+            createInputItem(SItem(Material.SPAWNER).setDisplayName("§aスポナーのレベルのスクリプトを設定する")
+                .addLore("§d現在の値:${data.levelModifierScript}"),String::class.java) { str, _ ->
+                val file = File(DungeonTower.plugin.dataFolder, str)
+                if (!file.exists()) {
+                    p.sendPrefixMsg(SStr("&cファイルが存在しません"))
+                    return@createInputItem
+                }
+                data.levelModifierScript = file.toRelativeString(DungeonTower.plugin.dataFolder)
             }
         )
 
@@ -137,15 +146,18 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
         config.set("challengeItem",data.challengeItem)
         config.set("challengeScript",data.challengeScript)
         config.set("entryScript",data.entryScript)
+        config.set("levelModifierScript",data.levelModifierScript)
 
         config.set("firstFloor",data.firstFloor.map { "${it.first},${it.second.internalName}" })
 
-        if (SJavaPlugin.sConfig.saveConfig(config,"towers/${data.internalName}")){
-            DungeonTower.towerData[data.internalName] = data
-            DungeonCommand()
-            p.sendPrefixMsg(SStr("&a保存に成功しました"))
-        } else {
-            p.sendPrefixMsg(SStr("&c保存に失敗しました"))
+        SJavaPlugin.sConfig.asyncSaveConfig(config,"towers/${data.internalName}").thenAccept {
+            if (it){
+                DungeonTower.towerData[data.internalName] = data
+                DungeonCommand()
+                p.sendPrefixMsg(SStr("&a保存に成功しました"))
+            } else {
+                p.sendPrefixMsg(SStr("&c保存に失敗しました"))
+            }
         }
     }
 }

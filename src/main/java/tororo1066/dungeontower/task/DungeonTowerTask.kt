@@ -67,7 +67,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
             nowFloor.activate()
 
             party.smokeStan(60)
-            party.teleport(nowFloor.preventFloorStairs.random().add(0.0,1.0,0.0))
+            party.teleport(nowFloor.previousFloorStairs.random().add(0.0,1.0,0.0))
             party.registerPark()
             party.invokePark(ActionType.ENTER_DUNGEON)
             party.invokePark(ActionType.ENTER_FLOOR)
@@ -190,7 +190,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                                 nowFloor.activate()
                                 party.smokeStan(60)
                                 unlockedChest = false
-                                party.teleport(nowFloor.preventFloorStairs.random().add(0.0,1.1,0.0))
+                                party.teleport(nowFloor.previousFloorStairs.random().add(0.0,1.1,0.0))
                                 callCommand(nowFloor)
                                 preventFloor.removeFloor()
                                 party.alivePlayers.keys.forEach {

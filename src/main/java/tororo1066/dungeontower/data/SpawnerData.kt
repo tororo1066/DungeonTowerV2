@@ -1,8 +1,11 @@
 package tororo1066.dungeontower.data
 
+import com.ezylang.evalex.Expression
 import io.lumine.mythic.api.mobs.MythicMob
 import org.bukkit.configuration.file.YamlConfiguration
 import tororo1066.dungeontower.DungeonTower
+import tororo1066.tororopluginapi.otherUtils.UsefulUtility
+import tororo1066.tororopluginapi.script.ScriptFile
 import java.io.File
 import kotlin.random.Random
 import kotlin.random.nextInt
@@ -32,6 +35,22 @@ class SpawnerData: Cloneable {
             preventRandom = mob.first
         }
         throw NullPointerException("Couldn't find mob. Maybe sum percentage is not 1000000.")
+    }
+
+    fun getLevel(towerData: TowerData, floorName: String, floorNum: Int): Double {
+        val script = towerData.levelModifierScript?:return level
+        val scriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, "scripts/$script"))
+        scriptFile.publicVariables["level"] = level
+        scriptFile.publicVariables["towerName"] = towerData.internalName
+        scriptFile.publicVariables["floorName"] = floorName
+        scriptFile.publicVariables["floorNum"] = floorNum
+        val level = UsefulUtility.sTry({
+            Expression("level()", scriptFile.configuration).evaluate().numberValue.toDouble()
+        }, {
+            level
+        })
+
+        return level
     }
 
     public override fun clone(): SpawnerData {

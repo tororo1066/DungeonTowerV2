@@ -23,7 +23,7 @@ import tororo1066.tororopluginapi.sEvent.SEvent
 import tororo1066.tororopluginapi.utils.sendMessage
 import java.util.UUID
 
-class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
+class DungeonTower: SJavaPlugin(UseOption.SConfig) {
 
     companion object{
         lateinit var plugin: DungeonTower
@@ -114,7 +114,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
         TodayClearNumberFunction.registerFunction()
         FloorScript.load()
 
-        SEvent(this).register(PlayerQuitEvent::class.java,EventPriority.LOWEST) { e ->
+        SEvent(this).register(PlayerQuitEvent::class.java, EventPriority.LOWEST) { e ->
             if (playNow.contains(e.player.uniqueId))return@register
             DungeonCommand.accepts.entries.removeIf { it.value.contains(e.player.uniqueId) }
             DungeonCommand.accepts.remove(e.player.uniqueId)
@@ -123,7 +123,5 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig, UseOption.MySQL) {
             }
             partiesData.remove(e.player.uniqueId)
         }
-
-        server.messenger.registerOutgoingPluginChannel(this, "tororo:dungeontower")
     }
 }

@@ -7,11 +7,13 @@ import net.kyori.adventure.text.format.TextColor
 import net.kyori.adventure.title.Title
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
+import org.bukkit.event.Event
 import org.bukkit.event.EventHandler
 import org.bukkit.event.HandlerList
 import org.bukkit.event.Listener
 import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.scheduler.BukkitRunnable
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.data.TowerData
@@ -93,7 +95,7 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
                         }
 
                         if (saveData.parkPoints < park.cost) {
-                            p.sendMessage("§c開放に必要なポイントが足りません")
+                            p.sendMessage("§c解放に必要なポイントが足りません")
                             clickCoolDown = false
                             return@thenAcceptAsync
                         }
@@ -148,7 +150,7 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
                             }
                         }
                         p.sendMessage("                                      ")
-                        p.sendMessage("§c開放してはいけないパーク")
+                        p.sendMessage("§c解放してはいけないパーク")
                         park.getBlockedParkNames().let {
                             if (it.isEmpty()) {
                                 p.sendMessage("§aなし")
@@ -230,12 +232,12 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
                 }
                 xLocation = if (yawDiff >= 0) i else -i
                 val component = text("                 ¡¢${menuChar}")
-                    .font(Key.key("custom_ui_save"))
+                    .font(Key.key("custom_ui"))
                     .color(TextColor.color(78, 92, 36))
                     .append(
                         //                                                                                       小(上)        小(下)     中(1)           小(中)         大(1)                                       中(2)              小(中)   大(2)                                             小(中)         中(3)        小(下)        小(上)
                         text("««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««««»»${smallItems.getCharForIndex(0)}«««««¬${smallItems.getCharForIndex(1)}«««¬${middleItems.getCharForIndex(0)}«««««««««»¬${smallItems.getCharForIndex(2)}«««««««»${largeItems.getCharForIndex(0)}««««««${middleItems.getCharForIndex(1)}««««««««««««¬¬${smallItems.getCharForIndex(3)}««${largeItems.getCharForIndex(1)}«««««««««««»¬${smallItems.getCharForIndex(4)}««««««»¬${middleItems.getCharForIndex(2)}«««««««¬${smallItems.getCharForIndex(5)}«««««»${smallItems.getCharForIndex(6)}                                   ")
-                            .font(Key.key("custom_ui_save"))
+                            .font(Key.key("custom_ui"))
                             .color(TextColor.color(255, 255, 255))
                     )
                 p.showTitle(
@@ -263,8 +265,9 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
 
     @EventHandler
     fun onInteract(e: PlayerInteractEvent){
+        if (e.useInteractedBlock() == Event.Result.DENY)return
+        if (e.hand != EquipmentSlot.HAND)return
         if (e.player != p)return
-        e.player.sendMessage("x:$xLocation y:$yLocation")
         onClick?.invoke(xLocation, yLocation)
     }
 }

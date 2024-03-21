@@ -114,12 +114,14 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(SJava
         config.set("items",itemStacks)
         config.set("chances",chances)
         config.set("amounts",amounts)
-        if (SJavaPlugin.sConfig.saveConfig(config,"loots/${data.internalName}")){
-            DungeonTower.lootData[data.internalName] = data
-            DungeonCommand()
-            p.sendPrefixMsg(SStr("&a保存に成功しました"))
-        } else {
-            p.sendPrefixMsg(SStr("&c保存に失敗しました"))
+        SJavaPlugin.sConfig.asyncSaveConfig(config,"loots/${data.internalName}").thenAccept {
+            if (it){
+                DungeonTower.lootData[data.internalName] = data
+                DungeonCommand()
+                p.sendPrefixMsg(SStr("&a保存に成功しました"))
+            } else {
+                p.sendPrefixMsg(SStr("&c保存に失敗しました"))
+            }
         }
     }
 }

@@ -114,12 +114,14 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
         config.set("level",data.level)
         config.set("activateRange",data.activateRange)
         config.set("navigate",data.navigateKill)
-        if (SJavaPlugin.sConfig.saveConfig(config,"spawners/${data.internalName}")){
-            DungeonTower.spawnerData[data.internalName] = data
-            DungeonCommand()
-            p.sendPrefixMsg(SStr("&a保存に成功しました"))
-        } else {
-            p.sendPrefixMsg(SStr("&c保存に失敗しました"))
+        SJavaPlugin.sConfig.asyncSaveConfig(config,"spawners/${data.internalName}").thenAccept {
+            if (it){
+                DungeonTower.spawnerData[data.internalName] = data
+                DungeonCommand()
+                p.sendPrefixMsg(SStr("&a保存に成功しました"))
+            } else {
+                p.sendPrefixMsg(SStr("&c保存に失敗しました"))
+            }
         }
     }
 }

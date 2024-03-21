@@ -29,6 +29,7 @@ class TowerData: Cloneable {
     val firstFloor = ArrayList<Pair<Int,FloorData>>()
     var challengeItem: ItemStack? = null
     var challengeScript: String? = null
+    var levelModifierScript: String? = null
 
     var entryScript: String? = null
 
@@ -196,6 +197,7 @@ class TowerData: Cloneable {
 
                 challengeItem = yml.getItemStack("challengeItem")
                 challengeScript = yml.getString("challengeScript")
+                levelModifierScript = yml.getString("levelModifierScript")
                 defaultParkPoints = yml.getInt("defaultParkPoints",0)
             }
 

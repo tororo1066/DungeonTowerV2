@@ -337,13 +337,15 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
         config.set("subFloors",data.subFloors.map { "${it.first},${it.second}" })
         config.set("shouldUseSaveData",data.shouldUseSaveData)
 
-        if (SJavaPlugin.sConfig.saveConfig(config,"floors/${data.internalName}")){
-            data.yml = config
-            DungeonTower.floorData[data.internalName] = data
-            DungeonCommand()
-            p.sendPrefixMsg(SStr("&a保存に成功しました"))
-        } else {
-            p.sendPrefixMsg(SStr("&c保存に失敗しました"))
+        SJavaPlugin.sConfig.asyncSaveConfig(config,"floors/${data.internalName}").thenAccept {
+            if (it){
+                data.yml = config
+                DungeonTower.floorData[data.internalName] = data
+                DungeonCommand()
+                p.sendPrefixMsg(SStr("&a保存に成功しました"))
+            } else {
+                p.sendPrefixMsg(SStr("&c保存に失敗しました"))
+            }
         }
     }
 
