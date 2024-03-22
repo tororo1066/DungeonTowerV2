@@ -95,6 +95,7 @@ class FloorData: Cloneable {
     var rotate = 0.0
     var parallelFloorOrigin: Location? = null
     lateinit var parentData: FloorData
+    var fromSignLocation: Location? = null
 
     val subFloors = ArrayList<Pair<Int, String>>()
 
@@ -374,11 +375,19 @@ class FloorData: Cloneable {
                     for (z in (lowZ..highZ)) {
                         val block = DungeonTower.floorWorld.getBlockAt(x, y, z)
 
-                        val placeLoc = location.clone().add(
-                            (x - originLocation.blockX) * cos(modifiedDirection) - (z - originLocation.blockZ) * sin(modifiedDirection),
-                            (y - originLocation.blockY).toDouble(),
-                            (z - originLocation.blockZ) * cos(modifiedDirection) + (x - originLocation.blockX) * sin(modifiedDirection)
-                        )
+                        val placeLoc = if (fromSignLocation == null) {
+                            location.clone().add(
+                                (x - originLocation.blockX) * cos(modifiedDirection) - (z - originLocation.blockZ) * sin(modifiedDirection),
+                                (y - originLocation.blockY).toDouble(),
+                                (z - originLocation.blockZ) * cos(modifiedDirection) + (x - originLocation.blockX) * sin(modifiedDirection)
+                            )
+                        } else {
+                            fromSignLocation!!.clone().add(
+                                (x - originLocation.blockX) * cos(modifiedDirection) - (z - originLocation.blockZ) * sin(modifiedDirection),
+                                (y - originLocation.blockY).toDouble(),
+                                (z - originLocation.blockZ) * cos(modifiedDirection) + (x - originLocation.blockX) * sin(modifiedDirection)
+                            )
+                        }
 
                         when (block.type) {
 
@@ -425,7 +434,8 @@ class FloorData: Cloneable {
                                         val label = script?.let { let -> FloorScript.getLabelName(let) } ?: "${x},${y},${z}"
                                         if (parallelFloors.containsKey(label)) {
                                             val floor = parallelFloors[label]!!
-                                            floor.generateFloor(towerData, floorNum, placeLoc, floor.rotate)
+                                            floor.fromSignLocation = placeLoc
+                                            floor.generateFloor(towerData, floorNum, fromSignLocation?:placeLoc, floor.rotate)
                                         }
 
                                         placeLoc.block.type = Material.AIR
@@ -482,11 +492,19 @@ class FloorData: Cloneable {
                 for (z in (lowZ..highZ)) {
                     val block = DungeonTower.floorWorld.getBlockAt(x, y, z)
 
-                    val placeLoc = location.clone().add(
-                        (x - originLocation.blockX) * cos(modifiedDirection) - (z - originLocation.blockZ) * sin(modifiedDirection),
-                        (y - originLocation.blockY).toDouble(),
-                        (z - originLocation.blockZ) * cos(modifiedDirection) + (x - originLocation.blockX) * sin(modifiedDirection)
-                    )
+                    val placeLoc = if (fromSignLocation == null) {
+                        location.clone().add(
+                            (x - originLocation.blockX) * cos(modifiedDirection) - (z - originLocation.blockZ) * sin(modifiedDirection),
+                            (y - originLocation.blockY).toDouble(),
+                            (z - originLocation.blockZ) * cos(modifiedDirection) + (x - originLocation.blockX) * sin(modifiedDirection)
+                        )
+                    } else {
+                        fromSignLocation!!.clone().add(
+                            (x - originLocation.blockX) * cos(modifiedDirection) - (z - originLocation.blockZ) * sin(modifiedDirection),
+                            (y - originLocation.blockY).toDouble(),
+                            (z - originLocation.blockZ) * cos(modifiedDirection) + (x - originLocation.blockX) * sin(modifiedDirection)
+                        )
+                    }
 
                     when (block.type) {
 
