@@ -245,7 +245,7 @@ class FloorData: Cloneable {
             if (direction >= 360) direction - direction / 360 * 360 else direction
         }
 
-        SDebug.broadcastDebug(1, "calculateLocation: $modifiedDirection")
+        SDebug.broadcastDebug(3, "calculateLocation: $modifiedDirection")
 
         modifiedDirection = Math.toRadians(modifiedDirection)
         val originLocation = (parallelFloorOrigin?:startLoc).clone()
@@ -278,10 +278,6 @@ class FloorData: Cloneable {
         }
 
         return Pair(dungeonStartLoc, dungeonEndLoc)
-    }
-
-    fun calculateBaseLocation() {
-
     }
 
     private fun noSaveGenerateFloor(towerData: TowerData, floorNum: Int) {
@@ -356,11 +352,11 @@ class FloorData: Cloneable {
             }
         }
 
-        SDebug.broadcastDebug(1, "generateFloor: $measure ms")
+        SDebug.broadcastDebug(3, "generateFloor: $measure ms")
 
         val modifiedDirection = Math.toRadians(
             if (direction < 0) direction + 360 else {
-                if (direction >= 360) direction - direction / 360 * 360 else direction
+                direction
             }
         )
 
@@ -374,15 +370,12 @@ class FloorData: Cloneable {
             for ((indexX, x) in (lowX..highX).withIndex()) {
                 for ((indexY, y) in (lowY..highY).withIndex()) {
                     for ((indexZ, z) in (lowZ..highZ).withIndex()) {
-                        //floorWorldの建築物自体がrotateしてないためこれは不適切 どうにかして
                         val block = DungeonTower.floorWorld.getBlockAt(x, y, z)
 
-//                        val placeLoc =
-//                            dungeonStartLoc.clone().add(indexX.toDouble() * xSign, indexY.toDouble() * ySign, indexZ.toDouble() * zSign)
-                        val placeLoc = dungeonStartLoc.clone().add(
-                            (indexX * cos(modifiedDirection) + indexZ * sin(modifiedDirection)),
-                            indexY.toDouble(),
-                            (indexZ * cos(modifiedDirection) - indexX * sin(modifiedDirection))
+                        val placeLoc = location.clone().add(
+                            (x - originLocation.blockX) * cos(modifiedDirection) - (z - originLocation.blockZ) * sin(modifiedDirection),
+                            (y - originLocation.blockY).toDouble(),
+                            (z - originLocation.blockZ) * cos(modifiedDirection) + (x - originLocation.blockX) * sin(modifiedDirection)
                         )
 
                         when (block.type) {
@@ -393,6 +386,7 @@ class FloorData: Cloneable {
                                 when (data.getLine(0)) {
                                     "loot" -> {
                                         val loot = (DungeonTower.lootData[data.getLine(1)] ?: continue).clone()
+                                        SDebug.broadcastDebug(1, "Generating Loot Chest in ${placeLoc.blockX},${placeLoc.blockY},${placeLoc.blockZ} (${x},${y},${z})")
                                         placeLoc.block.type = Material.CHEST
                                         val chest = placeLoc.block.state as Chest
                                         chest.customName(Component.text(loot.displayName))
@@ -424,6 +418,7 @@ class FloorData: Cloneable {
                                         )
                                     }
                                     "floor" -> {
+                                        SDebug.broadcastDebug(1, "Generating Parallel Floor in ${placeLoc.blockX},${placeLoc.blockY},${placeLoc.blockZ} (${x},${y},${z})")
                                         val script = data.getLine(3).ifBlank { null }
                                         val label = script?.let { let -> FloorScript.getLabelName(let) } ?: "${x},${y},${z}"
                                         if (parallelFloors.containsKey(label)) {
@@ -462,6 +457,8 @@ class FloorData: Cloneable {
         parallelFloors.clear()
         val (lowX, lowY, lowZ, highX, highY, highZ) = getPoints()
 
+        val originLocation = (parallelFloorOrigin ?: startLoc).clone()
+
         val (dungeonStartLoc, dungeonEndLoc) = calculateLocation(location, direction)
 
 //        val xSign = sign(dungeonEndLoc.blockX.toDouble() - dungeonStartLoc.blockX.toDouble())
@@ -470,7 +467,7 @@ class FloorData: Cloneable {
 
         val modifiedDirection = Math.toRadians(
             if (direction < 0) direction + 360 else {
-                if (direction >= 360) direction - direction / 360 * 360 else direction
+                direction
             }
         )
 
@@ -483,13 +480,10 @@ class FloorData: Cloneable {
                 for ((indexZ, z) in (lowZ..highZ).withIndex()) {
                     val block = DungeonTower.floorWorld.getBlockAt(x, y, z)
 
-//                    val placeLoc =
-//                        dungeonStartLoc.clone()
-//                            .add(indexX.toDouble() * xSign, indexY.toDouble() * ySign, indexZ.toDouble() * zSign)
-                    val placeLoc = dungeonStartLoc.clone().add(
-                        (indexX * cos(modifiedDirection) + indexZ * sin(modifiedDirection)),
-                        indexY.toDouble(),
-                        (indexZ * cos(modifiedDirection) - indexX * sin(modifiedDirection))
+                    val placeLoc = location.clone().add(
+                        (x - originLocation.blockX) * cos(modifiedDirection) - (z - originLocation.blockZ) * sin(modifiedDirection),
+                        (y - originLocation.blockY).toDouble(),
+                        (z - originLocation.blockZ) * cos(modifiedDirection) + (x - originLocation.blockX) * sin(modifiedDirection)
                     )
 
                     when (block.type) {
