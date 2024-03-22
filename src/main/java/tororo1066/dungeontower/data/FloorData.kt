@@ -310,8 +310,7 @@ class FloorData: Cloneable {
     )
 
     private fun generateFloor(towerData: TowerData, floorNum: Int, location: Location, direction: Double) {
-
-        SDebug.broadcastDebug(1, "generateFloorLocation: ${location.blockX},${location.blockY},${location.blockZ}")
+        SDebug.broadcastDebug(3, "GeneratingFloor $internalName (step: $generateStep) in ${location.blockX},${location.blockY},${location.blockZ} with direction $direction")
 
         previousFloorStairs.clear()
         nextFloorStairs.clear()
