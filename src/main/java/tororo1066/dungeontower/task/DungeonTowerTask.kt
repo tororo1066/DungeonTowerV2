@@ -281,7 +281,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
 
                 obj.getScore("  §7残り時間" +
                         " §a${
-                            if (nowFloor.time < 0) "0秒" else nowFloor.time.toLong()
+                            if (nowFloor.time <= 0) "0秒" else nowFloor.time.toLong()
                                 .toJPNDateStr(DateType.SECOND,DateType.MINUTE,false)
                         }").score = scoreInt
                 scoreInt--

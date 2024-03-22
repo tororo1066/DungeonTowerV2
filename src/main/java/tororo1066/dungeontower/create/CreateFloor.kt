@@ -99,6 +99,7 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
             createInputItem(SItem(Material.CLOCK).setDisplayName("§a制限時間を設定する")
                 .addLore("§d現在の値: ${data.time}秒"),Int::class.java) { int, _ ->
                     data.time = int
+                    data.initialTime = int
             },
             SInventoryItem(Material.REDSTONE_BLOCK).setDisplayName("§aクリアに必要なタスクを設定する")
                 .addLore("§d現在の値: ${data.clearTask.map { it.type.name }}").setCanClick(false)

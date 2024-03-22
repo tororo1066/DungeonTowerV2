@@ -242,7 +242,7 @@ class FloorData: Cloneable {
         val (lowX, lowY, lowZ, highX, highY, highZ) = getPoints()
 
         var modifiedDirection = if (direction < 0) direction + 360 else {
-            if (direction >= 360) direction - direction / 360 * 360 else direction
+            direction
         }
 
         SDebug.broadcastDebug(3, "calculateLocation: $modifiedDirection")
@@ -308,6 +308,8 @@ class FloorData: Cloneable {
 
     private fun generateFloor(towerData: TowerData, floorNum: Int, location: Location, direction: Double) {
 
+        SDebug.broadcastDebug(1, "generateFloorLocation: ${location.blockX},${location.blockY},${location.blockZ}")
+
         previousFloorStairs.clear()
         nextFloorStairs.clear()
         spawnerClearTasks.clear()
@@ -367,9 +369,9 @@ class FloorData: Cloneable {
 
 
         val meas = measureTimeMillis {
-            for ((indexX, x) in (lowX..highX).withIndex()) {
-                for ((indexY, y) in (lowY..highY).withIndex()) {
-                    for ((indexZ, z) in (lowZ..highZ).withIndex()) {
+            for (x in (lowX..highX)) {
+                for (y in (lowY..highY)) {
+                    for (z in (lowZ..highZ)) {
                         val block = DungeonTower.floorWorld.getBlockAt(x, y, z)
 
                         val placeLoc = location.clone().add(
@@ -448,7 +450,7 @@ class FloorData: Cloneable {
                 }
             }
         }
-        SDebug.broadcastDebug(1, "generateFloor2: $meas ms")
+        SDebug.broadcastDebug(3, "generateFloor2: $meas ms")
 
         generated = true
     }
@@ -475,9 +477,9 @@ class FloorData: Cloneable {
 
         val loadedParallelFloors = ArrayList<ParallelFloorData>()
 
-        for ((indexX, x) in (lowX..highX).withIndex()) {
-            for ((indexY, y) in (lowY..highY).withIndex()) {
-                for ((indexZ, z) in (lowZ..highZ).withIndex()) {
+        for (x in (lowX..highX)) {
+            for (y in (lowY..highY)) {
+                for (z in (lowZ..highZ)) {
                     val block = DungeonTower.floorWorld.getBlockAt(x, y, z)
 
                     val placeLoc = location.clone().add(
