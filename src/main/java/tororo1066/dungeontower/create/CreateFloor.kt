@@ -276,6 +276,12 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                     data.shouldUseSaveData = !data.shouldUseSaveData
                     allRenderMenu(p)
                 },
+            SInventoryItem(Material.WARPED_STAIRS).setDisplayName("§aタスクをクリアしていない時に階段に上るのを禁止する")
+                .addLore("§d現在の値: ${data.cancelStandOnStairs}").setCanClick(false)
+                .setClickEvent {
+                    data.cancelStandOnStairs = !data.cancelStandOnStairs
+                    allRenderMenu(p)
+                }
         )
 
         if (isEdit){
@@ -337,6 +343,7 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
         config.set("parallelFloorOrigin",data.parallelFloorOrigin?.toLocString(LocType.BLOCK_COMMA))
         config.set("subFloors",data.subFloors.map { "${it.first},${it.second}" })
         config.set("shouldUseSaveData",data.shouldUseSaveData)
+        config.set("cancelStandOnStairs",data.cancelStandOnStairs)
 
         SJavaPlugin.sConfig.asyncSaveConfig(config,"floors/${data.internalName}").thenAccept {
             if (it){

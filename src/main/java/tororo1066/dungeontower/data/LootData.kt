@@ -11,20 +11,35 @@ import org.bukkit.persistence.PersistentDataType
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.tororopluginapi.sItem.SItem
 import java.io.File
-import java.util.*
+import java.util.Random
 
 class LootData: LootTable, Cloneable {
 
-    //内部名
     var internalName = ""
-    val items = ArrayList<Triple<Int,IntProgression, SItem>>()//確率、個数、ItemStack
+    var items = ArrayList<Triple<Int, IntProgression, String>>()
     var rollAmount = 0
     var displayName = ""
 
+    companion object {
+        fun loadFromYml(file: File): Pair<String, LootData> {
+            val yml = YamlConfiguration.loadConfiguration(file)
+            val lootData = LootData().apply {
+                internalName = file.nameWithoutExtension
+                displayName = yml.getString("displayName")?:"DungeonTowerLootChest"
+                rollAmount = yml.getInt("roll")
+                val configItems = yml.getStringList("items")
+                val amounts = yml.getStringList("amounts").map { it.split("to")[0].toInt()..it.split("to")[1].toInt() }
+                val chances = yml.getIntegerList("chances")
+                for (i in configItems.indices){
+                    items.add(Triple(chances[i], amounts[i], (DungeonTower.lootItemData[configItems[i]]?:continue).internalName))
+                }
+            }
+            return Pair(file.nameWithoutExtension, lootData)
+        }
+    }
+
     override fun populateLoot(random: Random?, context: LootContext): MutableCollection<ItemStack> {
-
         val returnItems = ArrayList<ItemStack>()
-
         first@
         for (i in 0..rollAmount) {
             val randomNum = (random?: Random()).nextInt(999999) + 1
@@ -34,9 +49,37 @@ class LootData: LootTable, Cloneable {
                     val sumAmount = item.second.toList().random()
                     val stackAmount = sumAmount / 64
                     val amount = sumAmount % 64
-                    val dungeonItem = item.third.clone().setCustomData(
-                        DungeonTower.plugin,"dlootitem",
-                        PersistentDataType.STRING,"dlootitem")
+                    val lootItemData = DungeonTower.lootItemData[item.third]?:continue
+                    val dungeonItem = lootItemData.itemStack.clone().apply {
+                        setCustomData(
+                            DungeonTower.plugin,"dlootitem",
+                            PersistentDataType.INTEGER,0
+                        )
+                        if (lootItemData.announce) {
+                            setCustomData(
+                                DungeonTower.plugin,"dlootannounce",
+                                PersistentDataType.INTEGER,0
+                            )
+                        }
+                        if (lootItemData.removeFloorCount > 0) {
+                            setCustomData(
+                                DungeonTower.plugin,"dlootremovefloor",
+                                PersistentDataType.INTEGER,lootItemData.removeFloorCount
+                            )
+                        }
+                        if (lootItemData.removeOnExit) {
+                            setCustomData(
+                                DungeonTower.plugin,"dlootremoveonexit",
+                                PersistentDataType.INTEGER,0
+                            )
+                        }
+                        if (lootItemData.removeOnDeath) {
+                            setCustomData(
+                                DungeonTower.plugin,"dlootremoveondeath",
+                                PersistentDataType.INTEGER,0
+                            )
+                        }
+                    }
                     (1..stackAmount).forEach { _ ->
                         returnItems.add(dungeonItem.clone().setItemAmount(64))
                     }
@@ -56,7 +99,8 @@ class LootData: LootTable, Cloneable {
         }
         items = items.shuffled(random?:Random()).toMutableList()
         for (item in items.withIndex()){
-            if (item.value.itemMeta.persistentDataContainer.has(NamespacedKey(DungeonTower.plugin,"dloot"),
+            if (item.value.itemMeta.persistentDataContainer.has(
+                    NamespacedKey(DungeonTower.plugin,"dloot"),
                     PersistentDataType.STRING)) items[item.index] = ItemStack(Material.AIR)
         }
         inventory.contents = items.toTypedArray()
@@ -67,26 +111,8 @@ class LootData: LootTable, Cloneable {
     }
 
     public override fun clone(): LootData {
-        return super.clone() as LootData
-    }
-
-    companion object{
-        @Suppress("UNCHECKED_CAST")
-        fun loadFromYml(file: File): Pair<String, LootData> {
-            val yml = YamlConfiguration.loadConfiguration(file)
-            val data = LootData().apply {
-                internalName = file.nameWithoutExtension
-                rollAmount = yml.getInt("roll")
-                displayName = yml.getString("displayName")?:"DungeonTowerLootChest"
-                val configItems = yml.getList("items") as List<ItemStack>
-                val amounts = yml.getStringList("amounts").map { it.split("to")[0].toInt()..it.split("to")[1].toInt() }
-                val chances = yml.getIntegerList("chances")
-                for (i in configItems.indices){
-                    items.add(Triple(chances[i],amounts[i], SItem(configItems[i])))
-                }
-            }
-
-            return Pair(data.internalName, data)
+        return (super.clone() as LootData).apply {
+            items = ArrayList(items.map { Triple(it.first, it.second, it.third) })
         }
     }
 }

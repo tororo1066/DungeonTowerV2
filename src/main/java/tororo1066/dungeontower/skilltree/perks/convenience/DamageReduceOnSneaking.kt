@@ -1,17 +1,17 @@
-package tororo1066.dungeontower.skilltree.parks.convenience
+package tororo1066.dungeontower.skilltree.perks.convenience
 
 import org.bukkit.entity.Player
 import org.bukkit.event.EventPriority
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import tororo1066.dungeontower.data.UserData
-import tororo1066.dungeontower.skilltree.AbstractPark
-import tororo1066.dungeontower.skilltree.ParkLocation
+import tororo1066.dungeontower.skilltree.AbstractPerk
+import tororo1066.dungeontower.skilltree.PerkLocation
 import tororo1066.dungeontower.skilltree.Skill
 
-class DamageReduceOnSneaking: AbstractPark("convenience", Skill.CONVENIENCE_SMALL_CENTER, cost = 1) {
+class DamageReduceOnSneaking: AbstractPerk("convenience", Skill.CONVENIENCE_SMALL_CENTER, cost = 1) {
 
-    override fun getLocation(): ParkLocation {
-        return ParkLocation(-7..-4, 11..13)
+    override fun getLocation(): PerkLocation {
+        return PerkLocation(-7..-4, 11..13)
     }
 
     override fun getSkillName(): String {
@@ -24,7 +24,7 @@ class DamageReduceOnSneaking: AbstractPark("convenience", Skill.CONVENIENCE_SMAL
         )
     }
 
-    override fun registerPark(p: Player, userData: UserData) {
+    override fun registerPerk(p: Player, userData: UserData) {
         sEvent.register(EntityDamageByEntityEvent::class.java, EventPriority.LOWEST) { e ->
             if (e.entity.uniqueId != p.uniqueId) return@register
             if (!p.isSneaking) return@register

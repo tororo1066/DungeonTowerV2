@@ -30,10 +30,12 @@ class TowerData: Cloneable {
     var challengeItem: ItemStack? = null
     var challengeScript: String? = null
     var levelModifierScript: String? = null
+    var floorDisplayScript: String? = null
 
     var entryScript: String? = null
 
-    var defaultParkPoints = 0
+    var defaultPerkPoints = 0
+    var perkLimit = 0
 
     fun randomFloor(): FloorData {
         val random = Random.nextInt(1..1000000)
@@ -53,7 +55,6 @@ class TowerData: Cloneable {
             if (!bool) return@thenAcceptAsync
             if (entryScript != null){
                 val scriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, "$entryScript"))
-                scriptFile.debug = true
                 scriptFile.publicVariables["name"] = p.name
                 scriptFile.publicVariables["uuid"] = p.uniqueId.toString()
                 scriptFile.publicVariables["ip"] = p.address.address.hostAddress
@@ -83,7 +84,7 @@ class TowerData: Cloneable {
                     DungeonTower.floorData[floorName]
                 } else {
                     saveData?.let {
-                        if (floorNum < it.floors.size){
+                        if (floorNum <= it.floors.size){
                             DungeonTower.floorData[it.floors[floorNum]?.lastOrNull()?.get("internalName")]
                         } else {
                             null
@@ -120,10 +121,11 @@ class TowerData: Cloneable {
     fun canChallenge(p: Player, partyData: PartyData): CompletableFuture<Boolean> {
         if (partyData.players.size > partyLimit){
             p.sendPrefixMsg(SStr("&4${partyLimit}人以下でしか入れません (現在:${partyData.players.size}人)"))
+            DungeonCommand.entryCooldown.remove(p.uniqueId)
             return CompletableFuture.completedFuture(false)
         }
 
-        val completableFuture = CompletableFuture.completedFuture(true)
+        var completableFuture = CompletableFuture.completedFuture(true)
 
         if (challengeScript != null){
             val scriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, "$challengeScript"))
@@ -131,32 +133,36 @@ class TowerData: Cloneable {
             scriptFile.publicVariables["name"] = p.name
             scriptFile.publicVariables["uuid"] = p.uniqueId.toString()
             scriptFile.publicVariables["ip"] = p.address.address.hostAddress
-            completableFuture.completeAsync {
+            completableFuture = completableFuture.thenApplyAsync {
                 val result = scriptFile.start()
                 if (result is Boolean){
                     if (!result){
                         p.sendPrefixMsg(SStr("§c挑戦するための条件を満たしていません！"))
-                        return@completeAsync false
+                        DungeonCommand.entryCooldown.remove(p.uniqueId)
+                        return@thenApplyAsync false
                     } else {
-                        return@completeAsync true
+                        DungeonCommand.entryCooldown.remove(p.uniqueId)
+                        return@thenApplyAsync true
                     }
                 } else {
                     p.sendPrefixMsg(SStr("&4エラー。 運営に報告してください"))
                     Bukkit.broadcast(Component.text(
                         "${DungeonTower.prefix}§4§l[ERROR] §r§c${scriptFile.file.name}の戻り値がBooleanではありません"
                     ), Server.BROADCAST_CHANNEL_ADMINISTRATIVE)
-                    return@completeAsync false
+                    DungeonCommand.entryCooldown.remove(p.uniqueId)
+                    return@thenApplyAsync false
                 }
             }
 
         }
 
         if (challengeItem != null){
-            completableFuture.completeAsync {
+            completableFuture = completableFuture.thenApplyAsync {
                 val filter = p.inventory.filter { it?.isSimilar(challengeItem) == true }
                 if (filter.isEmpty() || filter.sumOf { it.amount } < challengeItem!!.amount){
                     p.sendPrefixMsg(SStr("§c挑戦するためのアイテムがありません！"))
-                    return@completeAsync false
+                    DungeonCommand.entryCooldown.remove(p.uniqueId)
+                    return@thenApplyAsync false
                 }
 
                 var amount = challengeItem!!.amount
@@ -170,7 +176,8 @@ class TowerData: Cloneable {
                     }
                 }
 
-                return@completeAsync true
+                DungeonCommand.entryCooldown.remove(p.uniqueId)
+                return@thenApplyAsync true
             }
         }
 
@@ -197,8 +204,11 @@ class TowerData: Cloneable {
 
                 challengeItem = yml.getItemStack("challengeItem")
                 challengeScript = yml.getString("challengeScript")
+                entryScript = yml.getString("entryScript")
                 levelModifierScript = yml.getString("levelModifierScript")
-                defaultParkPoints = yml.getInt("defaultParkPoints",0)
+                floorDisplayScript = yml.getString("floorDisplayScript")
+                defaultPerkPoints = yml.getInt("defaultPerkPoints",0)
+                perkLimit = yml.getInt("perkLimit",0)
             }
 
             return Pair(data.internalName, data)

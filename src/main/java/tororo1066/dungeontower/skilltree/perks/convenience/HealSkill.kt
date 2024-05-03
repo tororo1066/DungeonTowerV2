@@ -1,22 +1,18 @@
-package tororo1066.dungeontower.skilltree.parks.convenience
+package tororo1066.dungeontower.skilltree.perks.convenience
 
-import org.bukkit.Bukkit
-import org.bukkit.Material
 import org.bukkit.entity.Player
-import org.bukkit.inventory.ItemStack
 import tororo1066.dungeontower.DungeonTower
-import tororo1066.dungeontower.skilltree.AbstractPark
-import tororo1066.dungeontower.skilltree.ParkLocation
+import tororo1066.dungeontower.skilltree.AbstractPerk
+import tororo1066.dungeontower.skilltree.PerkLocation
 import tororo1066.dungeontower.skilltree.Skill
-import kotlin.math.cos
 
-class HealSkill: AbstractPark("convenience", Skill.CONVENIENCE_MIDDLE_1, cost = 1,
-    needParks = listOf(listOf(JustGuard::class.java), listOf(OnceHeal::class.java)),
+class HealSkill: AbstractPerk("convenience", Skill.CONVENIENCE_MIDDLE_1, cost = 1,
+    needPerks = listOf(listOf(JustGuard::class.java), listOf(OnceHeal::class.java)),
     blockedBy = listOf(BuffSkill::class.java)
 ) {
 
-    override fun getLocation(): ParkLocation {
-        return ParkLocation(-9..-4, 15..18)
+    override fun getLocation(): PerkLocation {
+        return PerkLocation(-9..-4, 15..18)
     }
 
     override fun getSkillName(): String {

@@ -1,6 +1,5 @@
 package tororo1066.dungeontower.save
 
-import com.google.gson.Gson
 import com.mongodb.client.model.Updates
 import org.bson.conversions.Bson
 import tororo1066.dungeontower.DungeonTower
@@ -8,7 +7,6 @@ import tororo1066.dungeontower.data.FloorData
 import tororo1066.dungeontower.data.TowerData
 import tororo1066.tororopluginapi.database.SDBCondition
 import tororo1066.tororopluginapi.database.SDBResultSet
-import tororo1066.tororopluginapi.database.SDBVariable
 import tororo1066.tororopluginapi.database.SDatabase
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -19,8 +17,8 @@ object SaveDataDB {
         val uuid: UUID,
         val towerName: String,
         val floors: HashMap<Int, ArrayList<Map<String, Any>>>,
-        val parkPoints: Int,
-        val parks: HashMap<String, ArrayList<String>>,
+        val perkPoints: Int,
+        val perks: HashMap<String, ArrayList<String>>,
         )
 
     val sDatabase = SDatabase.newInstance(DungeonTower.plugin)
@@ -48,9 +46,9 @@ object SaveDataDB {
                             }
                         ]
                     }
-                    "parkPoints": 0
-                    "parks": {
-                        "<category>": ["<park_name>", "<park_name>"]
+                    "perkPoints": 0
+                    "perks": {
+                        "<category>": ["<perk_name>", "<perk_name>"]
                     }
                     "connectTower": "<tower_name>" <- nullable
                 }
@@ -80,8 +78,8 @@ object SaveDataDB {
         tower: TowerData,
         floor: FloorData? = null,
         floorNum: Int? = null,
-        parkPoints: Int? = null,
-        parks: HashMap<String, ArrayList<String>>? = null
+        perkPoints: Int? = null,
+        perks: HashMap<String, ArrayList<String>>? = null
     ): CompletableFuture<Boolean> {
         if (sDatabase.isMongo) {
             return sDatabase.asyncSelect("save_data", SDBCondition().equal("uuid", uuid.toString())).thenApplyAsync {
@@ -96,12 +94,10 @@ object SaveDataDB {
                         if (floor != null && floorNum != null) {
                             singleData?.result?.keys?.forEach { towerName ->
                                 if (towerName == tower.internalName) {
-                                    val floors = singleData.getDeepResult(towerName).getDeepResult("floors")
-                                    floors.result.keys.forEach { floorNum ->
-                                        floors.getList<SDBResultSet>(floorNum).forEach { floorResultSet ->
-                                            if (floorResultSet.getString("internalName") == floor.internalName) {
-                                                return@thenApplyAsync false
-                                            }
+                                    val floors = singleData.getDeepResult(towerName).getNullableDeepResult("floors")
+                                    floors?.getNullableList<SDBResultSet>(floorNum.toString())?.forEach { floorResultSet ->
+                                        if (floorResultSet.getString("internalName") == floor.internalName) {
+                                            return@thenApplyAsync false
                                         }
                                     }
                                 }
@@ -109,59 +105,19 @@ object SaveDataDB {
                             updates.add(Updates.push("data.${tower.internalName}.floors.${floorNum}", floor.toMap()))
                         }
 
-                        if (parkPoints != null) {
-                            updates.add(Updates.set("data.${tower.internalName}.parkPoints", parkPoints))
+                        if (perkPoints != null) {
+                            updates.add(Updates.set("data.${tower.internalName}.perkPoints", perkPoints))
                         }
 
-                        if (parks != null) {
-                            updates.add(Updates.set("data.${tower.internalName}.parks", parks))
+                        if (perks != null) {
+                            updates.add(Updates.set("data.${tower.internalName}.perks", perks))
                         }
 
                         if (sDatabase.update("save_data", Updates.combine(
                                 updates
                             ), condition)) {
 
-                            val saveDataMap = hashMapOf<Int, ArrayList<Map<String, Any>>>()
-
-                            singleData?.result?.keys?.find { towerName ->
-                                towerName == tower.internalName
-                            }?.let { towerName ->
-                                singleData.getDeepResult(towerName).getNullableDeepResult("floors")?.let { floors ->
-                                    floors.result.keys.forEach { floorNum ->
-                                        val list = ArrayList<Map<String, Any>>()
-                                        floors.getList<SDBResultSet>(floorNum).forEach { floorResultSet ->
-                                            val map = HashMap<String, Any>()
-                                            floorResultSet.result.forEach second@ { (key, value) ->
-                                                map[key] = value?:return@second
-                                            }
-                                            list.add(map)
-                                        }
-                                        saveDataMap[floorNum.toInt()] = list
-                                    }
-                                }
-
-                            }
-
-                            if (floor != null && floorNum != null) {
-                                if (saveDataMap.containsKey(floorNum)) {
-                                    saveDataMap[floorNum]!!.add(floor.toMap())
-                                } else {
-                                    saveDataMap[floorNum] = arrayListOf(floor.toMap())
-                                }
-                            }
-
-                            val saveData = SaveData(uuid, tower.internalName, saveDataMap, parkPoints?:0, parks?: hashMapOf())
-                            if (cache.containsKey(uuid)) {
-                                cache[uuid]!!.indexOfFirst { indexOfFirst -> indexOfFirst.towerName == tower.internalName }.let { index ->
-                                    if (index != -1) {
-                                        cache[uuid]!![index] = saveData
-                                    } else {
-                                        cache[uuid]!!.add(saveData)
-                                    }
-                                }
-                            } else {
-                                cache[uuid] = arrayListOf(saveData)
-                            }
+                            load(uuid, force = true).join()
                             return@thenApplyAsync true
                         } else {
                             return@thenApplyAsync false
@@ -177,8 +133,8 @@ object SaveDataDB {
         }
     }
 
-    fun load(uuid: UUID): CompletableFuture<ArrayList<SaveData>> {
-        if (cache.containsKey(uuid)){
+    fun load(uuid: UUID, force: Boolean = false): CompletableFuture<ArrayList<SaveData>> {
+        if (cache.containsKey(uuid) && !force){
             return CompletableFuture.completedFuture(cache[uuid])
         }
         if (sDatabase.isMongo){
@@ -205,12 +161,12 @@ object SaveDataDB {
                                 floors[floorNum.toInt()] = list
                             }
 
-                            val parkPoints = towerData.getNullableInt("parkPoints")?:0
-                            val parks = hashMapOf<String, ArrayList<String>>()
-                            towerData.getNullableDeepResult("parks")?.result?.keys?.forEach { category ->
-                                parks[category] = ArrayList(towerData.getDeepResult("parks").getList<String>(category))
+                            val perkPoints = towerData.getNullableInt("perkPoints")?:0
+                            val perks = hashMapOf<String, ArrayList<String>>()
+                            towerData.getNullableDeepResult("perks")?.result?.keys?.forEach { category ->
+                                perks[category] = ArrayList(towerData.getDeepResult("perks").getList<String>(category))
                             }
-                            saveData.add(SaveData(uuid, towerName, floors, parkPoints, parks))
+                            saveData.add(SaveData(uuid, towerName, floors, perkPoints, perks))
                         }
                     }
                     cache[uuid] = saveData

@@ -54,6 +54,22 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
                 }
                 moveChildInventory(inv, p)
             },
+            createNullableInputItem(
+                SItem(Material.WRITABLE_BOOK).setDisplayName("§aスポーンスクリプトを設定する")
+                    .addLore("§d現在の値:${data.spawnScript}")
+                    .addLore("§cこれが有効な場合←は無視されます"), String::class.java
+            ) { str, _ ->
+                if (str == null) {
+                    data.spawnScript = null
+                    return@createNullableInputItem
+                }
+                val file = File(SJavaPlugin.plugin.dataFolder, str)
+                if (!file.exists()) {
+                    p.sendPrefixMsg(SStr("&cファイルが存在しません"))
+                    return@createNullableInputItem
+                }
+                data.spawnScript = file.toRelativeString(SJavaPlugin.plugin.dataFolder)
+            },
             createInputItem(SItem(Material.CLOCK).setDisplayName("§aCoolTime(tick)を設定する").addLore("§d現在の値:§c${data.coolTime}"),Int::class.java){ int, _ ->
                 data.coolTime = int
             },
@@ -103,10 +119,10 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
 
     private fun save(p: Player){
         val config = SJavaPlugin.sConfig.getConfig("spawners/${data.internalName}")?:YamlConfiguration()
-        config.set("mob",null)
         data.mobs.forEach {
             config.set("mobs.${it.second.internalName}",it.first)
         }
+        config.set("spawnScript",data.spawnScript)
         config.set("cooltime",data.coolTime)
         config.set("max",data.max)
         config.set("radius",data.radius)

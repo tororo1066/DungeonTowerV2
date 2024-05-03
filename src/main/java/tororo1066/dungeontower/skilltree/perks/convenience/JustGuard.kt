@@ -1,4 +1,4 @@
-package tororo1066.dungeontower.skilltree.parks.convenience
+package tororo1066.dungeontower.skilltree.perks.convenience
 
 import org.bukkit.Bukkit
 import org.bukkit.Particle
@@ -9,11 +9,11 @@ import org.bukkit.event.player.PlayerToggleSneakEvent
 import org.bukkit.scheduler.BukkitTask
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.data.UserData
-import tororo1066.dungeontower.skilltree.AbstractPark
+import tororo1066.dungeontower.skilltree.AbstractPerk
 import tororo1066.dungeontower.skilltree.Skill
-import tororo1066.dungeontower.skilltree.ParkLocation
+import tororo1066.dungeontower.skilltree.PerkLocation
 
-class JustGuard: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_1, cost = 1,
+class JustGuard: AbstractPerk("convenience", Skill.CONVENIENCE_LARGE_1, cost = 1,
     blockedBy = listOf(OnceHeal::class.java)
 ) {
 
@@ -22,8 +22,8 @@ class JustGuard: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_1, cost = 1
 
     private var _task: BukkitTask? = null
 
-    override fun getLocation(): ParkLocation {
-        return ParkLocation(-7..-2, 20..24)
+    override fun getLocation(): PerkLocation {
+        return PerkLocation(-7..-2, 20..24)
     }
 
     override fun getSkillName(): String {
@@ -37,7 +37,7 @@ class JustGuard: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_1, cost = 1
         )
     }
 
-    override fun registerPark(p: Player, userData: UserData) {
+    override fun registerPerk(p: Player, userData: UserData) {
         var blocking = false
         var cooldown = false
         sEvent.register(PlayerToggleSneakEvent::class.java) { e ->

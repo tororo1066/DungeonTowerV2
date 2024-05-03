@@ -46,8 +46,12 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
                     moveChildInventory(inv,p)
                 },
             createInputItem(SItem(Material.GLOWSTONE).setDisplayName("§aデフォルトのパークポイントを設定する")
-                .addLore("§d現在の値:${data.defaultParkPoints}"),Int::class.java) { int, _ ->
-                data.defaultParkPoints = int
+                .addLore("§d現在の値:${data.defaultPerkPoints}"),Int::class.java) { int, _ ->
+                data.defaultPerkPoints = int
+            },
+            createInputItem(SItem(Material.OBSIDIAN).setDisplayName("§aパークポイントの上限を設定する")
+                .addLore("§d現在の値:${data.perkLimit}"),Int::class.java) { int, _ ->
+                data.perkLimit = int
             },
             createInputItem(SItem(Material.REDSTONE_BLOCK).setDisplayName("§a挑戦出来るか確認するスクリプトを設定する")
                 .addLore("§d現在の値:${data.challengeScript}"),String::class.java) { str, _ ->
@@ -100,14 +104,31 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
                 }
                 moveChildInventory(inv,e.whoClicked as Player)
             },
-            createInputItem(SItem(Material.SPAWNER).setDisplayName("§aスポナーのレベルのスクリプトを設定する")
+            createNullableInputItem(SItem(Material.SPAWNER).setDisplayName("§aスポナーのレベルのスクリプトを設定する")
                 .addLore("§d現在の値:${data.levelModifierScript}"),String::class.java) { str, _ ->
+                if (str == null){
+                    data.levelModifierScript = null
+                    return@createNullableInputItem
+                }
                 val file = File(DungeonTower.plugin.dataFolder, str)
                 if (!file.exists()) {
                     p.sendPrefixMsg(SStr("&cファイルが存在しません"))
-                    return@createInputItem
+                    return@createNullableInputItem
                 }
                 data.levelModifierScript = file.toRelativeString(DungeonTower.plugin.dataFolder)
+            },
+            createNullableInputItem(SItem(Material.REDSTONE).setDisplayName("§aフロアの表示スクリプトを設定する")
+                .addLore("§d現在の値:${data.floorDisplayScript}"),String::class.java) { str, _ ->
+                if (str == null){
+                    data.floorDisplayScript = null
+                    return@createNullableInputItem
+                }
+                val file = File(DungeonTower.plugin.dataFolder, str)
+                if (!file.exists()) {
+                    p.sendPrefixMsg(SStr("&cファイルが存在しません"))
+                    return@createNullableInputItem
+                }
+                data.floorDisplayScript = file.toRelativeString(DungeonTower.plugin.dataFolder)
             }
         )
 
@@ -142,11 +163,13 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
         val config = SJavaPlugin.sConfig.getConfig("towers/${data.internalName}")?:YamlConfiguration()
         config.set("name",data.name)
         config.set("partyLimit",data.partyLimit)
-        config.set("defaultParkPoints",data.defaultParkPoints)
+        config.set("defaultPerkPoints",data.defaultPerkPoints)
+        config.set("perkLimit",data.perkLimit)
         config.set("challengeItem",data.challengeItem)
         config.set("challengeScript",data.challengeScript)
         config.set("entryScript",data.entryScript)
         config.set("levelModifierScript",data.levelModifierScript)
+        config.set("floorDisplayScript",data.floorDisplayScript)
 
         config.set("firstFloor",data.firstFloor.map { "${it.first},${it.second.internalName}" })
 

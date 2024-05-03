@@ -10,8 +10,8 @@ import tororo1066.dungeontower.task.DungeonTowerTask
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.utils.sendMessage
 import tororo1066.tororopluginapi.utils.toPlayer
-import java.util.*
-import kotlin.collections.HashMap
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
 
 class PartyData: Cloneable {
     val players = HashMap<UUID,UserData>()
@@ -55,17 +55,21 @@ class PartyData: Cloneable {
         }
     }
 
-    fun registerPark(){
+    fun loadPerk(towerName: String): CompletableFuture<Void> {
+        return CompletableFuture.allOf(*players.values.map { it.loadPerk(towerName) }.toTypedArray())
+    }
+
+    fun registerPerk(){
         players.values.forEach {
-            it.parks.values.forEach second@ { park ->
-                park.registerPark(it.uuid.toPlayer()?:return@forEach, it)
+            it.perks.values.forEach second@ { perk ->
+                perk.registerPerk(it.uuid.toPlayer()?:return@forEach, it)
             }
         }
     }
 
-    fun invokePark(actionType: ActionType){
+    fun invokePerk(actionType: ActionType){
         players.values.forEach {
-            it.invokePark(actionType)
+            it.invokePerk(actionType)
         }
     }
 

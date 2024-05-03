@@ -22,7 +22,7 @@ class TodayClearNumberFunction: AbstractFunction() {
             it.ifEmpty { null }
         }
         val log = TowerLogDB.getTodayClearCount(parameterValues[0].stringValue, parameterValues[1].stringValue, dungeons)
-        return EvaluationValue(log)
+        return EvaluationValue(log, expression.configuration)
     }
 
     companion object {

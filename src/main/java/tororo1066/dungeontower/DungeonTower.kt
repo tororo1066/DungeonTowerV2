@@ -42,6 +42,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         lateinit var sInput: SInput //入力マネージャー
         lateinit var util: UsefulUtility
 
+        val lootItemData = HashMap<String,LootItemData>() //アイテムのデータ
         val lootData = HashMap<String,LootData>() //宝箱のデータ
         val spawnerData = HashMap<String,SpawnerData>() //スポナーのデータ
         val floorData = HashMap<String,FloorData>() //フロアのデータ
@@ -71,6 +72,12 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
             sConfig.loadAllFiles("floors").forEach {
                 val floor = FloorData.loadFromYml(it)
                 floorData[floor.first] = floor.second
+            }
+
+            sConfig.mkdirs("lootItems")
+            sConfig.loadAllFiles("lootItems").forEach {
+                val lootItem = LootItemData.loadFromYml(it)
+                lootItemData[lootItem.first] = lootItem.second
             }
 
             sConfig.mkdirs("loots")
@@ -123,5 +130,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
             }
             partiesData.remove(e.player.uniqueId)
         }
+
+        server.messenger.registerOutgoingPluginChannel(this,"BungeeCord")
     }
 }

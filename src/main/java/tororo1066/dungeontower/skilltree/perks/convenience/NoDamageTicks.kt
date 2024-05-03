@@ -1,19 +1,19 @@
-package tororo1066.dungeontower.skilltree.parks.convenience
+package tororo1066.dungeontower.skilltree.perks.convenience
 
 import org.bukkit.entity.Player
 import org.bukkit.event.EventPriority
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import tororo1066.dungeontower.data.UserData
-import tororo1066.dungeontower.skilltree.AbstractPark
-import tororo1066.dungeontower.skilltree.ParkLocation
+import tororo1066.dungeontower.skilltree.AbstractPerk
+import tororo1066.dungeontower.skilltree.PerkLocation
 import tororo1066.dungeontower.skilltree.Skill
 
-class NoDamageTicks: AbstractPark("convenience", Skill.CONVENIENCE_MIDDLE_2, cost = 1,
-    needParks = listOf(listOf(JustGuard::class.java), listOf(OnceHeal::class.java))
+class NoDamageTicks: AbstractPerk("convenience", Skill.CONVENIENCE_MIDDLE_2, cost = 1,
+    needPerks = listOf(listOf(JustGuard::class.java), listOf(OnceHeal::class.java))
 ) {
 
-    override fun getLocation(): ParkLocation {
-        return ParkLocation(-2..2, 15..18)
+    override fun getLocation(): PerkLocation {
+        return PerkLocation(-2..2, 15..18)
     }
 
     override fun getSkillName(): String {
@@ -26,7 +26,7 @@ class NoDamageTicks: AbstractPark("convenience", Skill.CONVENIENCE_MIDDLE_2, cos
         )
     }
 
-    override fun registerPark(p: Player, userData: UserData) {
+    override fun registerPerk(p: Player, userData: UserData) {
         sEvent.register(EntityDamageByEntityEvent::class.java, EventPriority.LOWEST) { e ->
             if (e.isCancelled) return@register
             if (e.entity.uniqueId == p.uniqueId) {

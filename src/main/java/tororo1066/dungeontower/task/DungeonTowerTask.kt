@@ -16,11 +16,13 @@ import org.bukkit.event.player.PlayerVelocityEvent
 import org.bukkit.scoreboard.Criteria
 import org.bukkit.scoreboard.DisplaySlot
 import tororo1066.dungeontower.DungeonTower
+import tororo1066.dungeontower.command.DungeonCommand
 import tororo1066.dungeontower.data.FloorData
 import tororo1066.dungeontower.data.PartyData
 import tororo1066.dungeontower.data.TowerData
 import tororo1066.dungeontower.logging.TowerLogDB
 import tororo1066.dungeontower.skilltree.ActionType
+import tororo1066.tororopluginapi.SDebug.Companion.sendDebug
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.utils.DateType
 import tororo1066.tororopluginapi.utils.toJPNDateStr
@@ -44,6 +46,8 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
 
     private val rootParent = party.parent
 
+    private var floorDisplay = tower.name
+
     override fun onEnd(){
         nowFloor.removeFloor()
         end = true
@@ -55,6 +59,10 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
 
     override fun run() {
         if (party.players.size == 0)return
+        party.players.keys.forEach {
+            DungeonCommand.perkOpeningPlayers[it]?.stop()
+            DungeonCommand.perkOpeningPlayers.remove(it)
+        }
         TowerLogDB.insertPartyData(party)
         TowerLogDB.enterDungeon(party, tower.internalName)
         party.nowTask = this
@@ -62,15 +70,20 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
         nowFloor = firstFloor?.first?:tower.randomFloor()
 
         nowFloor.generateFloor(tower, nowFloorNum, rootParent).join()
+        floorDisplay = nowFloor.getDisplayName(tower, nowFloorNum)
 
+        party.loadPerk(tower.internalName).join()
+//        party.players.keys.forEach {
+//            clearDungeonItems(it.toPlayer()?:return@forEach)
+//        }
         runTask {
             nowFloor.activate()
 
             party.smokeStan(60)
             party.teleport(nowFloor.previousFloorStairs.random().add(0.0,1.0,0.0))
-            party.registerPark()
-            party.invokePark(ActionType.ENTER_DUNGEON)
-            party.invokePark(ActionType.ENTER_FLOOR)
+            party.registerPerk()
+            party.invokePerk(ActionType.ENTER_DUNGEON)
+            party.invokePerk(ActionType.ENTER_FLOOR)
         }
         callCommand(nowFloor)
         //eventでthreadをlockするの使わないで
@@ -86,7 +99,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
             nextFloorPlayers.entries.removeIf { it.value.contains(e.player.uniqueId) }
             clearDungeonItems(e.player)
             data.isAlive = false
-            data.invokePark(ActionType.DIE)
+            data.invokePerk(ActionType.DIE)
             party.broadCast(SStr("&c&l${e.player.name}が死亡した..."))
             e.player.spigot().respawn()
             for (p in party.players) {
@@ -126,7 +139,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
             nextFloorPlayers.entries.removeIf { it.value.contains(e.player.uniqueId) }
             clearDungeonItems(e.player)
             val data = party.players[e.player.uniqueId]!!
-            data.invokePark(ActionType.DIE)
+            data.invokePerk(ActionType.DIE)
             if (party.parent == e.player.uniqueId){
                 val randomParent = party.players.entries.filter { it.key != e.player.uniqueId }.randomOrNull()?.key
                 if (randomParent != null){
@@ -168,13 +181,21 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
             when(e.to.clone().subtract(0.0,1.0,0.0).block.type){
                 Material.WARPED_STAIRS -> {
                     val floor = getInFloor(nowFloor, e.player)?:return@register
-                    if (!floor.checkClear())return@register
+                    e.player.sendDebug("UpFloor", floor.internalName)
+                    if (!floor.checkClear()) {
+                        if (floor.cancelStandOnStairs) {
+                            e.isCancelled = true
+                        }
+                        return@register
+                    }
+                    e.player.sendDebug("UpFloor", "Clear")
                     if (nextFloorPlayers.containsKey(floor)){
                         nextFloorPlayers[floor]!!.add(e.player.uniqueId)
                     } else {
                         nextFloorPlayers[floor] = arrayListOf(e.player.uniqueId)
                     }
-                    if (party.alivePlayers.size / 2 < nextFloorPlayers[floor]!!.size && !createFloorNow
+
+                    if (party.alivePlayers.size / 2 <= nextFloorPlayers[floor]!!.size && !createFloorNow
                         && floor.subFloors.isNotEmpty()){
                         createFloorNow = true
                         party.alivePlayers.keys.forEach {
@@ -186,6 +207,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                         val preventFloor = nowFloor
                         nowFloor = floor.randomSubFloor()
                         nowFloor.generateFloor(tower, nowFloorNum, rootParent).thenAccept {
+                            floorDisplay = nowFloor.getDisplayName(tower, nowFloorNum)
                             DungeonTower.util.runTask {
                                 nowFloor.activate()
                                 party.smokeStan(60)
@@ -195,6 +217,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                                 preventFloor.removeFloor()
                                 party.alivePlayers.keys.forEach {
                                     moveLockPlayers.remove(it)
+                                    stepItems(it.toPlayer()?:return@forEach)
                                 }
                                 createFloorNow = false
                             }
@@ -259,7 +282,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                 nowFloor.time--
                 scoreboard = Bukkit.getScoreboardManager().newScoreboard
 
-                val obj = scoreboard.registerNewObjective("DungeonTower", Criteria.DUMMY, Component.text(tower.name))
+                val obj = scoreboard.registerNewObjective("DungeonTower", Criteria.DUMMY, Component.text(floorDisplay))
                 obj.displaySlot = DisplaySlot.SIDEBAR
 
                 obj.getScore("§6タスク").score = 0

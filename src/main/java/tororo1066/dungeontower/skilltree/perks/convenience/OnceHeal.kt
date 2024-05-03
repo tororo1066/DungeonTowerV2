@@ -1,4 +1,4 @@
-package tororo1066.dungeontower.skilltree.parks.convenience
+package tororo1066.dungeontower.skilltree.perks.convenience
 
 import org.bukkit.Color
 import org.bukkit.Material
@@ -9,22 +9,22 @@ import org.bukkit.inventory.meta.PotionMeta
 import org.bukkit.persistence.PersistentDataType
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.data.UserData
-import tororo1066.dungeontower.skilltree.AbstractPark
+import tororo1066.dungeontower.skilltree.AbstractPerk
 import tororo1066.dungeontower.skilltree.ActionType
-import tororo1066.dungeontower.skilltree.ParkLocation
+import tororo1066.dungeontower.skilltree.PerkLocation
 import tororo1066.dungeontower.skilltree.Skill
 import tororo1066.tororopluginapi.sItem.SInteractItemManager
 import tororo1066.tororopluginapi.sItem.SItem
 
-class OnceHeal: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_2, cost = 1,
+class OnceHeal: AbstractPerk("convenience", Skill.CONVENIENCE_LARGE_2, cost = 1,
     blockedBy = listOf(JustGuard::class.java)
 ) {
 
     private val interactManager = SInteractItemManager(DungeonTower.plugin)
     var healAmount = 10.0
 
-    override fun getLocation(): ParkLocation {
-        return ParkLocation(0..6, 20..24)
+    override fun getLocation(): PerkLocation {
+        return PerkLocation(0..6, 20..24)
     }
 
     override fun getSkillName(): String {
@@ -52,6 +52,7 @@ class OnceHeal: AbstractPark("convenience", Skill.CONVENIENCE_LARGE_2, cost = 1,
                     meta.color = Color.RED
                 }
                 val interactItem = interactManager.createSInteractItem(item, true).setInteractEvent { e, interactItem ->
+                    e.isCancelled = true
                     val player = e.player
                     if (player.health == player.getAttribute(Attribute.GENERIC_MAX_HEALTH)?.value) {
                         player.sendMessage("§c使う意味がないようだ...")

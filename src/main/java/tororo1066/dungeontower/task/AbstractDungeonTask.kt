@@ -5,14 +5,16 @@ import org.bukkit.Bukkit
 import org.bukkit.GameMode
 import org.bukkit.NamespacedKey
 import org.bukkit.entity.Player
-import org.bukkit.event.entity.PlayerDeathEvent
+import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
+import org.bukkit.scoreboard.DisplaySlot
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.data.FloorData
 import tororo1066.dungeontower.data.PartyData
 import tororo1066.dungeontower.data.TowerData
-import tororo1066.tororopluginapi.SStr
+import tororo1066.dungeontower.skilltree.ActionType
 import tororo1066.tororopluginapi.sEvent.SEvent
+import tororo1066.tororopluginapi.sItem.SItem
 import tororo1066.tororopluginapi.utils.toPlayer
 
 abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): Thread() {
@@ -68,42 +70,76 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         })
     }
 
-    protected fun clearDungeonItems(p: Player){
-        p.inventory.contents?.forEach {
-            if (it != null && it.itemMeta?.persistentDataContainer?.has(
-                    NamespacedKey(DungeonTower.plugin,"dlootitem"),
-                    PersistentDataType.STRING) == true){
-                it.amount = 0
+    protected fun clearDungeonItems(p: Player) {
+        fun clearDungeonItem(itemStack: ItemStack?) {
+            if (itemStack == null) return
+            if (itemStack.type.isAir || !itemStack.hasItemMeta()) return
+            val sItem = SItem(itemStack)
+            if (sItem.getCustomData(DungeonTower.plugin, "dlootitem", PersistentDataType.INTEGER) != null) {
+                if (sItem.getCustomData(DungeonTower.plugin, "dlootremoveondeath", PersistentDataType.INTEGER) != null) {
+                    itemStack.amount = 0
+                } else {
+                    itemStack.editMeta { meta -> meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin,"dlootitem")) }
+                }
             }
+
+        }
+        p.inventory.forEach {
+            clearDungeonItem(it)
         }
         val cursorItem = p.itemOnCursor
-        if (!cursorItem.type.isAir && cursorItem.itemMeta.persistentDataContainer.has(
-                NamespacedKey(DungeonTower.plugin,"dlootitem")
-            )){
-            cursorItem.amount = 0
-        }
+        clearDungeonItem(cursorItem)
     }
 
-    protected fun dungeonItemToItem(p: Player){
-        val inv = p.inventory
-        inv.contents?.forEach {
-            if (it != null && it.itemMeta?.persistentDataContainer?.has(
-                    NamespacedKey(DungeonTower.plugin, "dlootitem"),
-                    PersistentDataType.STRING) == true){
-                it.editMeta { meta -> meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin,"dlootitem")) }
-                if (it.itemMeta.persistentDataContainer.has(
-                        NamespacedKey(DungeonTower.plugin, "dannouncementitem"),
-                        PersistentDataType.INTEGER
-                    )){
-                    it.editMeta { meta -> meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin, "dannouncementitem")) }
-                    val out = ByteStreams.newDataOutput()
-                    out.writeUTF("message")
-                    out.writeUTF("${DungeonTower.prefix}§e§l${p.name}§dが§r${it.itemMeta.displayName}§dを手に入れた！")
-                    DungeonTower.plugin.server.sendPluginMessage(DungeonTower.plugin, "tororo:dungeontower", out.toByteArray())
-                    SStr("${DungeonTower.prefix}§e§l${p.name}§dが§r${it.itemMeta.displayName}§dを手に入れた！").broadcast()
+    protected fun stepItems(p: Player){
+        fun stepItem(itemStack: ItemStack?) {
+            if (itemStack == null) return
+            if (itemStack.type.isAir || !itemStack.hasItemMeta()) return
+            val sItem = SItem(itemStack)
+            if (sItem.getCustomData(DungeonTower.plugin, "dlootremovefloor", PersistentDataType.INTEGER) != null) {
+                val data = sItem.getCustomData(DungeonTower.plugin, "dlootremovefloor", PersistentDataType.INTEGER)?:return
+                if (data - 1 <= 0) {
+                    itemStack.amount = 0
+                } else {
+                    itemStack.editMeta { meta -> meta.persistentDataContainer.set(
+                        NamespacedKey(DungeonTower.plugin,"dlootremovefloor"),
+                        PersistentDataType.INTEGER,data - 1) }
                 }
             }
         }
+        p.inventory.forEach {
+            stepItem(it)
+        }
+        val cursorItem = p.itemOnCursor
+        stepItem(cursorItem)
+    }
+
+    protected fun dungeonItemToItem(p: Player){
+        fun dungeonItemToItem(itemStack: ItemStack?) {
+            if (itemStack == null) return
+            if (itemStack.type.isAir || !itemStack.hasItemMeta()) return
+            val sItem = SItem(itemStack)
+            if (sItem.getCustomData(DungeonTower.plugin, "dlootremoveonexit", PersistentDataType.INTEGER) != null) {
+                itemStack.amount = 0
+                return
+            }
+            if (sItem.getCustomData(DungeonTower.plugin, "dlootitem", PersistentDataType.INTEGER) != null) {
+                itemStack.editMeta { meta -> meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin,"dlootitem")) }
+                if (sItem.getCustomData(DungeonTower.plugin, "dlootannounce", PersistentDataType.INTEGER) != null){
+                    itemStack.editMeta { meta -> meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin,"dlootannounce")) }
+                    val out = ByteStreams.newDataOutput()
+                    out.writeUTF("Message")
+                    out.writeUTF("ALL")
+                    out.writeUTF("${DungeonTower.prefix}§e§l${p.name}§dが§r${itemStack.itemMeta.displayName}§dを手に入れた！")
+                    DungeonTower.plugin.server.sendPluginMessage(DungeonTower.plugin, "BungeeCord", out.toByteArray())
+                }
+            }
+        }
+        p.inventory.forEach {
+            dungeonItemToItem(it)
+        }
+        val cursorItem = p.itemOnCursor
+        dungeonItemToItem(cursorItem)
     }
 
     protected fun callCommand(floor: FloorData){
@@ -142,13 +178,18 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
 
     protected fun end(delay: Long = 60) {
         Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
-            party.players.keys.forEach { uuid ->
+            party.players.forEach { (uuid, data) ->
+                data.invokePerk(ActionType.END_DUNGEON)
                 val p = uuid.toPlayer()
+                p?.let {
+                    clearDungeonItems(it)
+                }
                 if (p?.gameMode == GameMode.SPECTATOR){
                     p.spectatorTarget = null
                     p.gameMode = GameMode.SURVIVAL
                 }
                 p?.teleport(DungeonTower.lobbyLocation)
+                p?.scoreboard?.clearSlot(DisplaySlot.SIDEBAR)
                 DungeonTower.partiesData.remove(uuid)
                 DungeonTower.playNow.remove(uuid)
             }
@@ -168,10 +209,10 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         }
 
         mainFloor.parallelFloors.values.forEach { parallel ->
+            getInFloor(parallel,p)?.let { return it }
             if (check(parallel)){
                 return parallel
             }
-            getInFloor(parallel,p)?.let { return it }
         }
 
         if (check(mainFloor)){

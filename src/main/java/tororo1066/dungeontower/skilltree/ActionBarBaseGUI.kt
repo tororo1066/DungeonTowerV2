@@ -11,24 +11,26 @@ import org.bukkit.event.Event
 import org.bukkit.event.EventHandler
 import org.bukkit.event.HandlerList
 import org.bukkit.event.Listener
-import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.scheduler.BukkitRunnable
 import tororo1066.dungeontower.DungeonTower
+import tororo1066.dungeontower.DungeonTower.Companion.sendPrefixMsg
+import tororo1066.dungeontower.command.DungeonCommand
 import tororo1066.dungeontower.data.TowerData
 import tororo1066.dungeontower.save.SaveDataDB
-import tororo1066.tororopluginapi.sEvent.SEvent
+import tororo1066.tororopluginapi.SStr
 import java.time.Duration
 import kotlin.math.abs
 
 open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuChar: Char): Listener {
 
     init {
+        p.sendPrefixMsg(SStr("&b&lシフト右クリックで閉じる"))
         SaveDataDB.load(p.uniqueId).thenAcceptAsync { data ->
             val thisData = data?.find { it.towerName == towerData.internalName }
             if (thisData == null) {
-                SaveDataDB.save(p.uniqueId, towerData, parkPoints = towerData.defaultParkPoints).thenAcceptAsync { result ->
+                SaveDataDB.save(p.uniqueId, towerData, perkPoints = towerData.defaultPerkPoints).thenAcceptAsync { result ->
                     if (!result){
                         p.sendMessage("§cエラーが発生しました")
                     }
@@ -43,37 +45,19 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
     var xLocation = 0
     lateinit var runnable: BukkitRunnable
 
-    val items = LinkedHashMap<ParkLocation, AbstractPark>()
-    val largeItems = LinkedHashMap<ParkLocation, AbstractPark>()
-    val middleItems = LinkedHashMap<ParkLocation, AbstractPark>()
-    val smallItems = LinkedHashMap<ParkLocation, AbstractPark>()
+    val items = LinkedHashMap<PerkLocation, AbstractPerk>()
+    val largeItems = LinkedHashMap<PerkLocation, AbstractPerk>()
+    val middleItems = LinkedHashMap<PerkLocation, AbstractPerk>()
+    val smallItems = LinkedHashMap<PerkLocation, AbstractPerk>()
 
     var clickCoolDown = false
-    var selectedPark: AbstractPark? = null
+    var selectedPerk: AbstractPerk? = null
 
     var onCursor: ((Int, Int) -> Component)? = null
-//    var onCursor: ((Int, Int) -> Component)? = { x, y ->
-//        val park = items.entries.find { it.key.xLocation.contains(x) && it.key.yLocation.contains(y) }?.value
-//        if (park != null){
-//            val builder = StringBuilder()
-//            for (i in 1..abs(xLocation)) {
-//                if (xLocation > 0) {
-//                    builder.append("  ")
-//                } else {
-//                    builder.append("««")
-//                }
-//            }
-//            builder.append("クリックで詳細を見る")
-//            val text = text(builder.toString()).font(Key.key("font_plus_${abs(yLocation).toInt() - abs(yLocation).toInt() % 4}"))
-//            text
-//        } else {
-//            text("")
-//        }
-//    }
-    fun onClick(x: Int, y: Int) {
+    private fun onClick(x: Int, y: Int) {
         if (!clickCoolDown) {
-            val park = items.entries.find { it.key.xLocation.contains(x) && it.key.yLocation.contains(y) }?.value
-            if (park != null) {
+            val perk = items.entries.find { it.key.xLocation.contains(x) && it.key.yLocation.contains(y) }?.value
+            if (perk != null) {
                 clickCoolDown = true
                 SaveDataDB.load(p.uniqueId).thenAcceptAsync { data ->
                     if (data == null) {
@@ -87,26 +71,26 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
                         clickCoolDown = false
                         return@thenAcceptAsync
                     }
-                    if (selectedPark != null && selectedPark == park) {
-                        if (saveData.parks.any { it.value.contains(park.javaClass.simpleName) }) {
+                    if (selectedPerk != null && selectedPerk == perk) {
+                        if (saveData.perks.any { it.value.contains(perk.javaClass.simpleName) }) {
                             p.sendMessage("§c既に解放されています")
                             clickCoolDown = false
                             return@thenAcceptAsync
                         }
 
-                        if (saveData.parkPoints < park.cost) {
+                        if (saveData.perkPoints < perk.cost) {
                             p.sendMessage("§c解放に必要なポイントが足りません")
                             clickCoolDown = false
                             return@thenAcceptAsync
                         }
 
-                        if (park.blockedBy.any { saveData.parks.any { any -> any.value.contains(it.simpleName) } }) {
+                        if (perk.blockedBy.any { saveData.perks.any { any -> any.value.contains(it.simpleName) } }) {
                             p.sendMessage("§c特定のスキルにブロックされています")
                             clickCoolDown = false
                             return@thenAcceptAsync
                         }
 
-                        if (park.needParks.isNotEmpty() && !park.needParks.any { it.all { saveData.parks.any { any -> any.value.contains(it.simpleName) } } }) {
+                        if (perk.needPerks.isNotEmpty() && !perk.needPerks.any { it.all { saveData.perks.any { any -> any.value.contains(it.simpleName) } } }) {
                             p.sendMessage("§c必要なスキルを習得していません")
                             clickCoolDown = false
                             return@thenAcceptAsync
@@ -115,57 +99,57 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
                         val result = SaveDataDB.save(
                             p.uniqueId,
                             towerData,
-                            parkPoints = saveData.parkPoints - park.cost,
-                            parks = saveData.parks.apply {
-                                this[park.category] = this[park.category]?.apply {
-                                    this.add(park.javaClass.simpleName)
-                                } ?: arrayListOf(park.javaClass.simpleName)
+                            perkPoints = saveData.perkPoints - perk.cost,
+                            perks = saveData.perks.apply {
+                                this[perk.category] = this[perk.category]?.apply {
+                                    this.add(perk.javaClass.simpleName)
+                                } ?: arrayListOf(perk.javaClass.simpleName)
                             }).get()
                         if (result) {
-                            park.onLearned(p)
-                            p.sendMessage("${park.getSkillName()}§aを習得しました")
-                            selectedPark = null
+                            perk.onLearned(p)
+                            p.sendMessage("${perk.getSkillName()}§aを習得しました")
+                            selectedPerk = null
                         } else {
                             p.sendMessage("§cエラーが発生しました")
                         }
                         clickCoolDown = false
                     } else {
                         p.sendMessage("§c§l==============================")
-                        p.sendMessage(park.getSkillName())
-                        park.getSkillDescription().forEach {
+                        p.sendMessage(perk.getSkillName())
+                        perk.getSkillDescription().forEach {
                             p.sendMessage(it)
                         }
                         p.sendMessage("                                      ")
                         p.sendMessage("§9解放に必要なパーク")
-                        park.getNeedParkNames().let {
+                        perk.getNeedPerkNames().let {
                             if (it.isEmpty()) {
                                 p.sendMessage("§aなし")
                             } else {
-                                it.forEachIndexed { index, parkList ->
+                                it.forEachIndexed { index, perkList ->
                                     if (index > 0) p.sendMessage("§7または")
-                                    parkList.forEach { parkName ->
-                                        p.sendMessage(parkName)
+                                    perkList.forEach { perkName ->
+                                        p.sendMessage(perkName)
                                     }
                                 }
                             }
                         }
                         p.sendMessage("                                      ")
                         p.sendMessage("§c解放してはいけないパーク")
-                        park.getBlockedParkNames().let {
+                        perk.getBlockedPerkNames().let {
                             if (it.isEmpty()) {
                                 p.sendMessage("§aなし")
                             } else {
-                                it.forEach { parkName ->
-                                    p.sendMessage(parkName)
+                                it.forEach { perkName ->
+                                    p.sendMessage(perkName)
                                 }
                             }
                         }
                         p.sendMessage("                                      ")
-                        p.sendMessage("§a§l解放に必要なポイント: ${park.cost}")
+                        p.sendMessage("§a§l解放に必要なポイント: ${perk.cost}")
                         p.sendMessage("                                      ")
                         p.sendMessage("§d§lもう一度クリックで解放")
                         p.sendMessage("§c§l==============================")
-                        selectedPark = park
+                        selectedPerk = perk
                         clickCoolDown = false
                     }
                 }
@@ -176,7 +160,7 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
         onClick(x, y)
     }
 
-    protected fun registerItems(vararg items: AbstractPark){
+    protected fun registerItems(vararg items: AbstractPerk){
         for (item in items){
             val location = item.getLocation()
             this.items[location] = item
@@ -189,6 +173,7 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
     }
 
     fun show(){
+        DungeonCommand.perkOpeningPlayers[p.uniqueId] = this
         initYaw = p.location.yaw
         initPitch = 0f
         Bukkit.getPluginManager().registerEvents(this, DungeonTower.plugin)
@@ -241,7 +226,7 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
                             .color(TextColor.color(255, 255, 255))
                     )
                 p.showTitle(
-                    Title.title(text(builder.toString()).font(Key.key("custom_ui_save"))
+                    Title.title(text(builder.toString()).font(Key.key("custom_ui"))
                         , onCursor?.invoke(xLocation, yLocation)?: text(""), Title.Times.times(Duration.ZERO, Duration.ofSeconds(1), Duration.ZERO)))
                 p.sendActionBar(component)
 
@@ -253,11 +238,12 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
     }
 
     fun stop(){
+        DungeonCommand.perkOpeningPlayers.remove(p.uniqueId)
         runnable.cancel()
         HandlerList.unregisterAll(this)
     }
 
-    private fun HashMap<ParkLocation, AbstractPark>.getCharForIndex(index: Int): Char {
+    private fun HashMap<PerkLocation, AbstractPerk>.getCharForIndex(index: Int): Char {
         return this.toList()[index].second.texture.char
     }
 
@@ -265,9 +251,13 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
 
     @EventHandler
     fun onInteract(e: PlayerInteractEvent){
-        if (e.useInteractedBlock() == Event.Result.DENY)return
+        if (e.useInteractedBlock() == Event.Result.DEFAULT)return
         if (e.hand != EquipmentSlot.HAND)return
         if (e.player != p)return
+        if (e.player.isSneaking && e.action.isRightClick) {
+            stop()
+            return
+        }
         onClick?.invoke(xLocation, yLocation)
     }
 }

@@ -1,18 +1,18 @@
-package tororo1066.dungeontower.skilltree.parks.convenience
+package tororo1066.dungeontower.skilltree.perks.convenience
 
 import org.bukkit.attribute.Attribute
 import org.bukkit.attribute.AttributeModifier
 import org.bukkit.entity.Player
 import tororo1066.dungeontower.data.UserData
-import tororo1066.dungeontower.skilltree.AbstractPark
+import tororo1066.dungeontower.skilltree.AbstractPerk
 import tororo1066.dungeontower.skilltree.ActionType
-import tororo1066.dungeontower.skilltree.ParkLocation
+import tororo1066.dungeontower.skilltree.PerkLocation
 import tororo1066.dungeontower.skilltree.Skill
 
-class SpeedUp: AbstractPark("convenience", Skill.CONVENIENCE_SMALL_CENTER, cost = 1) {
+class SpeedUp: AbstractPerk("convenience", Skill.CONVENIENCE_SMALL_CENTER, cost = 1) {
 
-    override fun getLocation(): ParkLocation {
-        return ParkLocation(3..6, 11..13)
+    override fun getLocation(): PerkLocation {
+        return PerkLocation(3..6, 11..13)
     }
 
     override fun getSkillName(): String {
@@ -25,7 +25,7 @@ class SpeedUp: AbstractPark("convenience", Skill.CONVENIENCE_SMALL_CENTER, cost 
         )
     }
 
-    override fun registerPark(p: Player, userData: UserData) {
+    override fun registerPerk(p: Player, userData: UserData) {
         p.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED)?.addModifier(
             AttributeModifier(
                 "speed_up",
@@ -36,7 +36,7 @@ class SpeedUp: AbstractPark("convenience", Skill.CONVENIENCE_SMALL_CENTER, cost 
     }
 
     override fun onAction(p: Player, action: ActionType, userData: UserData) {
-        if (action == ActionType.END_DUNGEON) {
+        if (action == ActionType.END_DUNGEON || action == ActionType.DIE) {
             val attribute = p.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED)
             attribute?.modifiers?.firstOrNull { it.name == "speed_up" }?.let {
                 attribute.removeModifier(it)
