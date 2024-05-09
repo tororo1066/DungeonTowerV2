@@ -11,8 +11,11 @@ class OnceHealAmountUp: AbstractPerk("convenience", Skill.CONVENIENCE_SMALL_DOWN
     needPerks = listOf(listOf(OnceHeal::class.java))
 ) {
 
-    override fun getLocation(): PerkLocation {
-        return PerkLocation(8..10, 10..12)
+    override fun getLocation(): Map<String, PerkLocation> {
+        return mapOf(
+            "2560x1440" to PerkLocation(8..10, 10..12),
+            "1920x1080" to PerkLocation(8..10, 14..17)
+        )
     }
 
     override fun getSkillName(): String {

@@ -4,7 +4,7 @@ import org.bukkit.entity.Player
 import tororo1066.dungeontower.data.TowerData
 import tororo1066.dungeontower.skilltree.perks.convenience.*
 
-class ConvenienceGUI(p: Player, towerData: TowerData): ActionBarBaseGUI(p, towerData, SkillMenu.CONVENIENCE.char) {
+class ConvenienceGUI(p: Player, towerData: TowerData, resolution: String): ActionBarBaseGUI(p, towerData, SkillMenu.CONVENIENCE.char, resolution) {
 
     init {
         registerItems(

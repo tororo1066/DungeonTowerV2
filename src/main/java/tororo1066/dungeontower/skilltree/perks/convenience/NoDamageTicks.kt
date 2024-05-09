@@ -8,12 +8,15 @@ import tororo1066.dungeontower.skilltree.AbstractPerk
 import tororo1066.dungeontower.skilltree.PerkLocation
 import tororo1066.dungeontower.skilltree.Skill
 
-class NoDamageTicks: AbstractPerk("convenience", Skill.CONVENIENCE_MIDDLE_2, cost = 1,
+class NoDamageTicks: AbstractPerk("convenience", Skill.CONVENIENCE_MIDDLE_2, cost = 2,
     needPerks = listOf(listOf(JustGuard::class.java), listOf(OnceHeal::class.java))
 ) {
 
-    override fun getLocation(): PerkLocation {
-        return PerkLocation(-2..2, 15..18)
+    override fun getLocation(): Map<String, PerkLocation> {
+        return mapOf(
+            "2560x1440" to PerkLocation(-2..2, 15..18),
+            "1920x1080" to PerkLocation(-2..2, 19..22)
+        )
     }
 
     override fun getSkillName(): String {

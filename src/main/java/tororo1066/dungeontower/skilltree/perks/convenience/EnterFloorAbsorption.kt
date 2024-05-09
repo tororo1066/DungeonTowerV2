@@ -9,10 +9,13 @@ import tororo1066.dungeontower.skilltree.ActionType
 import tororo1066.dungeontower.skilltree.PerkLocation
 import tororo1066.dungeontower.skilltree.Skill
 
-class EnterFloorAbsorption: AbstractPerk("convenience", Skill.CONVENIENCE_SMALL_CENTER, cost = 1) {
+class EnterFloorAbsorption: AbstractPerk("convenience", Skill.CONVENIENCE_SMALL_CENTER, cost = 2) {
 
-    override fun getLocation(): PerkLocation {
-        return PerkLocation(-2..1, 11..13)
+    override fun getLocation(): Map<String, PerkLocation> {
+        return mapOf(
+            "2560x1440" to PerkLocation(-2..1, 11..13),
+            "1920x1080" to PerkLocation(-2..1, 15..18)
+        )
     }
 
     override fun getSkillName(): String {

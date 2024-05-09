@@ -9,8 +9,11 @@ import tororo1066.dungeontower.skilltree.Skill
 
 class JustGuardDurationUp: AbstractPerk("convenience", Skill.CONVENIENCE_SMALL_DOWN, cost = 1, needPerks = listOf(listOf(JustGuard::class.java))) {
 
-    override fun getLocation(): PerkLocation {
-        return PerkLocation(-11..-9, 10..12)
+    override fun getLocation(): Map<String, PerkLocation> {
+        return mapOf(
+            "2560x1440" to PerkLocation(-11..-9, 10..12),
+            "1920x1080" to PerkLocation(-11..-9, 14..17)
+        )
     }
 
     override fun getSkillName(): String {

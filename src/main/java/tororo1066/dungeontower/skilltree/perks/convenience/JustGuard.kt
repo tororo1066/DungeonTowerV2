@@ -22,8 +22,11 @@ class JustGuard: AbstractPerk("convenience", Skill.CONVENIENCE_LARGE_1, cost = 1
 
     private var _task: BukkitTask? = null
 
-    override fun getLocation(): PerkLocation {
-        return PerkLocation(-7..-2, 20..24)
+    override fun getLocation(): Map<String, PerkLocation> {
+        return mapOf(
+            "2560x1440" to PerkLocation(-7..-2, 20..24),
+            "1920x1080" to PerkLocation(-7..-2, 24..28),
+        )
     }
 
     override fun getSkillName(): String {

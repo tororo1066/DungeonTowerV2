@@ -10,8 +10,11 @@ class HealSkillUpgrade: AbstractPerk("convenience", Skill.CONVENIENCE_SMALL_UP, 
     needPerks = listOf(listOf(HealSkill::class.java))
 ) {
 
-    override fun getLocation(): PerkLocation {
-        return PerkLocation(-14..-11, 14..16)
+    override fun getLocation(): Map<String, PerkLocation> {
+        return mapOf(
+            "2560x1440" to PerkLocation(-14..-11, 14..16),
+            "1920x1080" to PerkLocation(-14..-11, 18..21)
+        )
     }
 
     override fun getSkillName(): String {

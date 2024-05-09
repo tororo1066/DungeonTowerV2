@@ -30,7 +30,7 @@ class SpawnerData: Cloneable {
     fun randomMob(towerData: TowerData, floorName: String, floorNum: Int): MythicMob? {
         if (spawnScript != null) {
             if (spawnScriptFile == null) {
-                spawnScriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, spawnScript!!))
+                spawnScriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, spawnScript!!), true)
             }
             val scriptFile = spawnScriptFile!!
             scriptFile.publicVariables.apply {

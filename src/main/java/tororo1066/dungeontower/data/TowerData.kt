@@ -51,74 +51,75 @@ class TowerData: Cloneable {
 
     fun entryTower(p: Player, partyData: PartyData): CompletableFuture<Void> {
         DungeonCommand.entryCooldown.add(p.uniqueId)
-        return canChallenge(p, partyData).thenAcceptAsync { bool ->
-            if (!bool) return@thenAcceptAsync
-            if (entryScript != null){
-                val scriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, "$entryScript"))
-                scriptFile.publicVariables["name"] = p.name
-                scriptFile.publicVariables["uuid"] = p.uniqueId.toString()
-                scriptFile.publicVariables["ip"] = p.address.address.hostAddress
-                val data = SaveDataDB.load(p.uniqueId).get()
-                val saveData = data.find { it.towerName == internalName }
-                saveData?.let {
-                    scriptFile.publicVariables["floors"] = it.floors.mapKeys { map -> map.key.toString() }.plus("size" to it.floors.size)
-                } ?: run {
-                    scriptFile.publicVariables["floors"] = mapOf("size" to 0)
-                }
+        return CompletableFuture.runAsync {
+            val saveData = SaveDataDB.load(p.uniqueId).get().find { it.towerName == internalName }
+            canChallenge(p, partyData, saveData).thenAcceptAsync { bool ->
+                if (!bool) return@thenAcceptAsync
+                if (entryScript != null){
+                    val scriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, "$entryScript"))
+                    scriptFile.publicVariables["name"] = p.name
+                    scriptFile.publicVariables["uuid"] = p.uniqueId.toString()
+                    scriptFile.publicVariables["ip"] = p.address.address.hostAddress
+                    saveData?.let {
+                        scriptFile.publicVariables["floors"] = it.floors.mapKeys { map -> map.key.toString() }.plus("size" to it.floors.size)
+                    } ?: run {
+                        scriptFile.publicVariables["floors"] = mapOf("size" to 0)
+                    }
 
-                val result = scriptFile.start()
-                if (result !is String) {
-                    p.sendPrefixMsg(SStr("&4エラー。 運営に報告してください"))
-                    Bukkit.broadcast(Component.text(
-                        "${DungeonTower.prefix}§4§l[ERROR] §r§c${scriptFile.file.name}の戻り値がStringではありません"
-                    ), Server.BROADCAST_CHANNEL_ADMINISTRATIVE)
-                    DungeonCommand.entryCooldown.remove(p.uniqueId)
-                    return@thenAcceptAsync
-                }
+                    val result = scriptFile.start()
+                    if (result !is String) {
+                        p.sendPrefixMsg(SStr("&4エラー。 運営に報告してください"))
+                        Bukkit.broadcast(Component.text(
+                            "${DungeonTower.prefix}§4§l[ERROR] §r§c${scriptFile.file.name}の戻り値がStringではありません"
+                        ), Server.BROADCAST_CHANNEL_ADMINISTRATIVE)
+                        DungeonCommand.entryCooldown.remove(p.uniqueId)
+                        return@thenAcceptAsync
+                    }
 
-                val split = result.split(",")
-                val floorNum = split[0].toInt()
-                val floorName = split.getOrNull(1)
+                    val split = result.split(",")
+                    val floorNum = split[0].toInt()
+                    val floorName = split.getOrNull(1)
 
-                val floorData = if (floorName != null){
-                    DungeonTower.floorData[floorName]
+                    val floorData = if (floorName != null){
+                        DungeonTower.floorData[floorName]
+                    } else {
+                        saveData?.let {
+                            if (floorNum <= it.floors.size){
+                                DungeonTower.floorData[it.floors[floorNum]?.lastOrNull()?.get("internalName")]
+                            } else {
+                                null
+                            }
+                        }
+                    }?.newInstance()?.apply {
+                        saveData?.let {
+                            it.floors[floorNum]?.find { find -> find["internalName"] == internalName }?.let { data ->
+                                loadData(data)
+                            }
+                        }
+                    }
+                    partyData.players.keys.forEach {
+                        DungeonTower.playNow.add(it)
+                    }
+                    val floor = floorData?.let { it to floorNum }
+                    DungeonTower.util.runTask {
+                        DungeonTowerTask(partyData, this, floor).start()
+                    }
+
                 } else {
-                    saveData?.let {
-                        if (floorNum <= it.floors.size){
-                            DungeonTower.floorData[it.floors[floorNum]?.lastOrNull()?.get("internalName")]
-                        } else {
-                            null
-                        }
+                    partyData.players.keys.forEach {
+                        DungeonTower.playNow.add(it)
                     }
-                }?.newInstance()?.apply {
-                    saveData?.let {
-                        it.floors[floorNum]?.find { find -> find["internalName"] == internalName }?.let { data ->
-                            loadData(data)
-                        }
+                    DungeonTower.util.runTask {
+                        DungeonTowerTask(partyData, this).start()
                     }
                 }
-                partyData.players.keys.forEach {
-                    DungeonTower.playNow.add(it)
-                }
-                val floor = floorData?.let { it to floorNum }
-                DungeonTower.util.runTask {
-                    DungeonTowerTask(partyData, this, floor).start()
-                }
 
-            } else {
-                partyData.players.keys.forEach {
-                    DungeonTower.playNow.add(it)
-                }
-                DungeonTower.util.runTask {
-                    DungeonTowerTask(partyData, this).start()
-                }
-            }
-
-            DungeonCommand.entryCooldown.remove(p.uniqueId)
+                DungeonCommand.entryCooldown.remove(p.uniqueId)
+            }.join()
         }
     }
 
-    fun canChallenge(p: Player, partyData: PartyData): CompletableFuture<Boolean> {
+    fun canChallenge(p: Player, partyData: PartyData, saveData: SaveDataDB.SaveData?): CompletableFuture<Boolean> {
         if (partyData.players.size > partyLimit){
             p.sendPrefixMsg(SStr("&4${partyLimit}人以下でしか入れません (現在:${partyData.players.size}人)"))
             DungeonCommand.entryCooldown.remove(p.uniqueId)
@@ -133,6 +134,11 @@ class TowerData: Cloneable {
             scriptFile.publicVariables["name"] = p.name
             scriptFile.publicVariables["uuid"] = p.uniqueId.toString()
             scriptFile.publicVariables["ip"] = p.address.address.hostAddress
+            saveData?.let {
+                scriptFile.publicVariables["floors"] = it.floors.mapKeys { map -> map.key.toString() }.plus("size" to it.floors.size)
+            } ?: run {
+                scriptFile.publicVariables["floors"] = mapOf("size" to 0)
+            }
             completableFuture = completableFuture.thenApplyAsync {
                 val result = scriptFile.start()
                 if (result is Boolean){

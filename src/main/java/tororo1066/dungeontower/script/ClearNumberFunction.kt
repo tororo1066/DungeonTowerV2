@@ -12,8 +12,7 @@ import java.util.Calendar
 @FunctionParameter(name = "uuid")
 @FunctionParameter(name = "ip")
 @FunctionParameter(name = "dungeon", isVarArg = true)
-class TodayClearNumberFunction: AbstractFunction() {
-
+class ClearNumberFunction: AbstractFunction() {
     override fun evaluate(
         expression: Expression,
         functionToken: Token,
@@ -22,24 +21,18 @@ class TodayClearNumberFunction: AbstractFunction() {
         val dungeons = parameterValues.drop(2).map { it.stringValue }.let {
             it.ifEmpty { null }
         }
-        val time = Calendar.getInstance().apply {
-            set(Calendar.HOUR, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.time
         val log = TowerLogDB.getClearCount(
             parameterValues[0].stringValue,
             parameterValues[1].stringValue,
             dungeons,
-            time
+            null
         )
         return EvaluationValue(log, expression.configuration)
     }
 
     companion object {
         fun registerFunction(){
-            ScriptFile.functions["dt_today_clear"] = { TodayClearNumberFunction() }
+            ScriptFile.functions["dt_clear"] = { ClearNumberFunction() }
         }
     }
 }

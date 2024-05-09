@@ -8,10 +8,13 @@ import tororo1066.dungeontower.skilltree.AbstractPerk
 import tororo1066.dungeontower.skilltree.PerkLocation
 import tororo1066.dungeontower.skilltree.Skill
 
-class DamageReduceOnSneaking: AbstractPerk("convenience", Skill.CONVENIENCE_SMALL_CENTER, cost = 1) {
+class DamageReduceOnSneaking: AbstractPerk("convenience", Skill.CONVENIENCE_SMALL_CENTER, cost = 2) {
 
-    override fun getLocation(): PerkLocation {
-        return PerkLocation(-7..-4, 11..13)
+    override fun getLocation(): Map<String, PerkLocation> {
+        return mapOf(
+            "2560x1440" to PerkLocation(-7..-4, 11..13),
+            "1920x1080" to PerkLocation(-7..-4, 15..18)
+        )
     }
 
     override fun getSkillName(): String {

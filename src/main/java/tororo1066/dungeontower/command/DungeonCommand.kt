@@ -83,6 +83,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
     @SCommandBody("dungeon.user.perk")
     val showPerkMenu = command().addArg(SCommandArg("showPerk"))
         .addArg(SCommandArg(DungeonTower.towerData.keys).addAlias("ダンジョン名"))
+        .addArg(SCommandArg(listOf("2560x1440", "1920x1080")))
         .setPlayerExecutor {
             if (DungeonTower.playNow.contains(it.sender.uniqueId) || entryCooldown.contains(it.sender.uniqueId)){
                 it.sender.sendPrefixMsg(SStr("&cダンジョンに参加しています"))
@@ -92,7 +93,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
                 perkOpeningPlayers[it.sender.uniqueId]!!.stop()
             }
             val tower = DungeonTower.towerData[it.args[1]]!!
-            val gui = ConvenienceGUI(it.sender, tower)
+            val gui = ConvenienceGUI(it.sender, tower, it.args[2])
             gui.show()
         }
 

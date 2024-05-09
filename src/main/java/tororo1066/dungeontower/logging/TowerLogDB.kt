@@ -77,26 +77,25 @@ class TowerLogDB {
             }
         }
 
-        fun getTodayClearCount(uuid: String, ip: String, dungeons: List<String>? = null): Int {
-            val time = Calendar.getInstance().apply {
-                set(Calendar.HOUR, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.time
+        fun getClearCount(uuid: String, ip: String, dungeons: List<String>? = null, time: Date?): Int {
+
             return if (database.isMongo){
                 val condition = SDBCondition().equal("actions.action", "CLEAR_DUNGEON")
                     .and(SDBCondition().equal("users.ip",ip).or(SDBCondition().equal("users.uuid",uuid)))
-                    .and(SDBCondition().orHigher("actions.date", time))
-                if (dungeons != null){
+                if (time != null) {
+                    condition.and(SDBCondition().orHigher("actions.date", time))
+                }
+                if (dungeons != null) {
                     condition.and(SDBCondition().include("actions.value", dungeons))
                 }
                 database.asyncSelect("tower_log", condition).get().count()
             } else {
                 val condition = SDBCondition().equal("action", "CLEAR_DUNGEON")
                     .and(SDBCondition().like("ip", ip).or(SDBCondition().like("uuid", uuid)))
-                    .and(SDBCondition().orHigher("date", time.toSQLVariable(SDBVariable.DateTime)))
-                if (dungeons != null){
+                if (time != null) {
+                    condition.and(SDBCondition().orHigher("date", time.toSQLVariable(SDBVariable.DateTime)))
+                }
+                if (dungeons != null) {
                     condition.and(SDBCondition().include("value", dungeons))
                 }
                 database.asyncSelect(

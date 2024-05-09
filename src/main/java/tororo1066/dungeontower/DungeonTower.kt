@@ -14,6 +14,7 @@ import tororo1066.dungeontower.data.*
 import tororo1066.dungeontower.script.TodayClearNumberFunction
 import tororo1066.dungeontower.logging.TowerLogDB
 import tororo1066.dungeontower.save.SaveDataDB
+import tororo1066.dungeontower.script.ClearNumberFunction
 import tororo1066.dungeontower.script.FloorScript
 import tororo1066.tororopluginapi.SInput
 import tororo1066.tororopluginapi.SJavaPlugin
@@ -119,6 +120,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         DungeonCommand()
         TowerLogDB()
         TodayClearNumberFunction.registerFunction()
+        ClearNumberFunction.registerFunction()
         FloorScript.load()
 
         SEvent(this).register(PlayerQuitEvent::class.java, EventPriority.LOWEST) { e ->

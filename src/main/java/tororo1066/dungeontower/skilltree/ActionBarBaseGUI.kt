@@ -23,10 +23,10 @@ import tororo1066.tororopluginapi.SStr
 import java.time.Duration
 import kotlin.math.abs
 
-open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuChar: Char): Listener {
+open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuChar: Char, val resolution: String): Listener {
 
     init {
-        p.sendPrefixMsg(SStr("&b&lシフト右クリックで閉じる"))
+        p.sendPrefixMsg(SStr("&b&lシフト左クリックで閉じる"))
         SaveDataDB.load(p.uniqueId).thenAcceptAsync { data ->
             val thisData = data?.find { it.towerName == towerData.internalName }
             if (thisData == null) {
@@ -145,7 +145,7 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
                             }
                         }
                         p.sendMessage("                                      ")
-                        p.sendMessage("§a§l解放に必要なポイント: ${perk.cost}")
+                        p.sendMessage("§a§l解放に必要なポイント: ${perk.cost}§7(現在: ${saveData.perkPoints})")
                         p.sendMessage("                                      ")
                         p.sendMessage("§d§lもう一度クリックで解放")
                         p.sendMessage("§c§l==============================")
@@ -162,7 +162,7 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
 
     protected fun registerItems(vararg items: AbstractPerk){
         for (item in items){
-            val location = item.getLocation()
+            val location = item.getLocation()[resolution] ?: continue
             this.items[location] = item
             when(item.texture.type) {
                 Type.LARGE -> largeItems[location] = item
@@ -238,6 +238,8 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
     }
 
     fun stop(){
+        p.showTitle(Title.title(text(""), text("")))
+        p.sendActionBar(Component.empty())
         DungeonCommand.perkOpeningPlayers.remove(p.uniqueId)
         runnable.cancel()
         HandlerList.unregisterAll(this)
@@ -251,10 +253,10 @@ open class ActionBarBaseGUI(val p: Player, val towerData: TowerData, val menuCha
 
     @EventHandler
     fun onInteract(e: PlayerInteractEvent){
-        if (e.useInteractedBlock() == Event.Result.DEFAULT)return
         if (e.hand != EquipmentSlot.HAND)return
         if (e.player != p)return
-        if (e.player.isSneaking && e.action.isRightClick) {
+        e.isCancelled = true
+        if (e.player.isSneaking && e.action.isLeftClick) {
             stop()
             return
         }

@@ -23,8 +23,11 @@ class OnceHeal: AbstractPerk("convenience", Skill.CONVENIENCE_LARGE_2, cost = 1,
     private val interactManager = SInteractItemManager(DungeonTower.plugin)
     var healAmount = 10.0
 
-    override fun getLocation(): PerkLocation {
-        return PerkLocation(0..6, 20..24)
+    override fun getLocation(): Map<String, PerkLocation> {
+        return mapOf(
+            "2560x1440" to PerkLocation(0..6, 20..24),
+            "1920x1080" to PerkLocation(0..6, 24..28)
+        )
     }
 
     override fun getSkillName(): String {
@@ -44,7 +47,7 @@ class OnceHeal: AbstractPerk("convenience", Skill.CONVENIENCE_LARGE_2, cost = 1,
             ActionType.ENTER_FLOOR -> {
                 if (p.itemOnCursor.itemMeta?.persistentDataContainer?.has(NamespacedKey(DungeonTower.plugin, "once_heal"), PersistentDataType.INTEGER) == true) return
                 if (p.inventory.any { it?.itemMeta?.persistentDataContainer?.has(NamespacedKey(DungeonTower.plugin, "once_heal"), PersistentDataType.INTEGER) == true }) return
-                val item = SItem(Material.SPLASH_POTION)
+                val item = SItem(Material.RED_DYE)
                     .setDisplayName("§c§l治癒の風")
                     .addLore("§9体力を回復する")
                     .setCustomData(DungeonTower.plugin, "once_heal", PersistentDataType.INTEGER, 1)
@@ -69,7 +72,7 @@ class OnceHeal: AbstractPerk("convenience", Skill.CONVENIENCE_LARGE_2, cost = 1,
                 p.inventory.addItem(interactItem)
             }
 
-            ActionType.END_DUNGEON -> {
+            ActionType.END_DUNGEON, ActionType.DIE -> {
                 p.inventory.filter {
                     it?.itemMeta?.persistentDataContainer?.has(NamespacedKey(DungeonTower.plugin, "once_heal"), PersistentDataType.INTEGER) == true
                 }.forEach {

@@ -15,7 +15,7 @@ abstract class AbstractPerk(
 
     val sEvent = SEvent(DungeonTower.plugin)
 
-    abstract fun getLocation(): PerkLocation
+    abstract fun getLocation(): Map<String, PerkLocation>
 
     abstract fun getSkillName(): String
 
