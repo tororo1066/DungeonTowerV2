@@ -204,17 +204,18 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                         party.broadCast(SStr("&7転移中..."))//메시지
 
                         nowFloorNum++
-                        val preventFloor = nowFloor
+                        val previousFloor = nowFloor
                         nowFloor = floor.randomSubFloor()
                         nowFloor.generateFloor(tower, nowFloorNum, rootParent).thenAccept {
                             floorDisplay = nowFloor.getDisplayName(tower, nowFloorNum)
                             DungeonTower.util.runTask {
+                                previousFloor.killMobs()
                                 nowFloor.activate()
                                 party.smokeStan(60)
                                 unlockedChest = false
                                 party.teleport(nowFloor.previousFloorStairs.random().add(0.0,1.1,0.0))
                                 callCommand(nowFloor)
-                                preventFloor.removeFloor()
+                                previousFloor.removeFloor()
                                 party.alivePlayers.keys.forEach {
                                     moveLockPlayers.remove(it)
                                     stepItems(it.toPlayer()?:return@forEach)

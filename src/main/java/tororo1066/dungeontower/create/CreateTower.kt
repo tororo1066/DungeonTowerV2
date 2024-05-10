@@ -129,6 +129,10 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
                     return@createNullableInputItem
                 }
                 data.floorDisplayScript = file.toRelativeString(DungeonTower.plugin.dataFolder)
+            },
+            createInputItem(SItem(Material.PINK_WOOL).setDisplayName("§a並列最大人数を設定する")
+                .addLore("§d現在の値:${data.playerLimit}"),Int::class.java) { int, _ ->
+                data.playerLimit = int
             }
         )
 
@@ -170,6 +174,7 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
         config.set("entryScript",data.entryScript)
         config.set("levelModifierScript",data.levelModifierScript)
         config.set("floorDisplayScript",data.floorDisplayScript)
+        config.set("playerLimit",data.playerLimit)
 
         config.set("firstFloor",data.firstFloor.map { "${it.first},${it.second.internalName}" })
 

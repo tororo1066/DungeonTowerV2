@@ -6,7 +6,7 @@ import tororo1066.dungeontower.skilltree.AbstractPerk
 import tororo1066.dungeontower.skilltree.PerkLocation
 import tororo1066.dungeontower.skilltree.Skill
 
-class HealSkillUpgrade: AbstractPerk("convenience", Skill.CONVENIENCE_SMALL_UP, cost = 1,
+class HealSkillUpgrade: AbstractPerk("convenience", Skill.CONVENIENCE_SMALL_UP, cost = 2,
     needPerks = listOf(listOf(HealSkill::class.java))
 ) {
 

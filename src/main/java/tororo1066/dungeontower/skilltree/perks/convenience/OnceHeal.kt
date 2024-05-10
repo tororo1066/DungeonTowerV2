@@ -57,11 +57,16 @@ class OnceHeal: AbstractPerk("convenience", Skill.CONVENIENCE_LARGE_2, cost = 1,
                 val interactItem = interactManager.createSInteractItem(item, true).setInteractEvent { e, interactItem ->
                     e.isCancelled = true
                     val player = e.player
-                    if (player.health == player.getAttribute(Attribute.GENERIC_MAX_HEALTH)?.value) {
+                    val maxHealth = player.getAttribute(Attribute.GENERIC_MAX_HEALTH)?.value?: 20.0
+                    if (player.health == maxHealth) {
                         player.sendMessage("§c使う意味がないようだ...")
                         return@setInteractEvent true
                     }
-                    player.health += healAmount
+                    if (player.health + healAmount > maxHealth) {
+                        player.health = maxHealth
+                    } else {
+                        player.health += healAmount
+                    }
                     player.sendMessage("§c体力が回復した...")
                     e.item?.amount = 0
                     interactItem.delete()

@@ -690,7 +690,7 @@ class FloorData: Cloneable {
         }
     }
 
-    fun removeFloor(){
+    fun killMobs() {
         val helper = BukkitAPIHelper()
         DungeonTower.dungeonWorld.entities.filter {
             spawnerClearTasks.containsKey(
@@ -706,6 +706,9 @@ class FloorData: Cloneable {
                 mob.remove()
             }
         }
+    }
+
+    fun removeFloor(){
         spawners.forEach {
             it.stop()
         }

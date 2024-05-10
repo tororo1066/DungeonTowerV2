@@ -37,6 +37,8 @@ class TowerData: Cloneable {
     var defaultPerkPoints = 0
     var perkLimit = 0
 
+    var playerLimit = -1
+
     fun randomFloor(): FloorData {
         val random = Random.nextInt(1..1000000)
         var preventRandom = 0
@@ -50,11 +52,20 @@ class TowerData: Cloneable {
     }
 
     fun entryTower(p: Player, partyData: PartyData): CompletableFuture<Void> {
+        if (DungeonTower.joiningNow) {
+            p.sendPrefixMsg(SStr("&4少し待ってから再度試してください"))
+            DungeonCommand.entryCooldown.remove(p.uniqueId)
+            return CompletableFuture.completedFuture(null)
+        }
+        DungeonTower.joiningNow = true
         DungeonCommand.entryCooldown.add(p.uniqueId)
         return CompletableFuture.runAsync {
             val saveData = SaveDataDB.load(p.uniqueId).get().find { it.towerName == internalName }
             canChallenge(p, partyData, saveData).thenAcceptAsync { bool ->
-                if (!bool) return@thenAcceptAsync
+                if (!bool) {
+                    DungeonTower.joiningNow = false
+                    return@thenAcceptAsync
+                }
                 if (entryScript != null){
                     val scriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, "$entryScript"))
                     scriptFile.publicVariables["name"] = p.name
@@ -73,6 +84,7 @@ class TowerData: Cloneable {
                             "${DungeonTower.prefix}§4§l[ERROR] §r§c${scriptFile.file.name}の戻り値がStringではありません"
                         ), Server.BROADCAST_CHANNEL_ADMINISTRATIVE)
                         DungeonCommand.entryCooldown.remove(p.uniqueId)
+                        DungeonTower.joiningNow = false
                         return@thenAcceptAsync
                     }
 
@@ -115,11 +127,18 @@ class TowerData: Cloneable {
                 }
 
                 DungeonCommand.entryCooldown.remove(p.uniqueId)
+                DungeonTower.joiningNow = false
             }.join()
         }
     }
 
     fun canChallenge(p: Player, partyData: PartyData, saveData: SaveDataDB.SaveData?): CompletableFuture<Boolean> {
+        if (playerLimit != -1 && DungeonTower.partiesData.count { it.value != null && it.value!!.nowTask?.tower?.internalName == internalName } >= playerLimit){
+            p.sendPrefixMsg(SStr("&4最大並行プレイ人数の上限に達しています"))
+            DungeonCommand.entryCooldown.remove(p.uniqueId)
+            return CompletableFuture.completedFuture(false)
+        }
+
         if (partyData.players.size > partyLimit){
             p.sendPrefixMsg(SStr("&4${partyLimit}人以下でしか入れません (現在:${partyData.players.size}人)"))
             DungeonCommand.entryCooldown.remove(p.uniqueId)
@@ -215,6 +234,7 @@ class TowerData: Cloneable {
                 floorDisplayScript = yml.getString("floorDisplayScript")
                 defaultPerkPoints = yml.getInt("defaultPerkPoints",0)
                 perkLimit = yml.getInt("perkLimit",0)
+                playerLimit = yml.getInt("playerLimit",-1)
             }
 
             return Pair(data.internalName, data)

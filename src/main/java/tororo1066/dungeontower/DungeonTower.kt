@@ -51,6 +51,8 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         val partiesData = HashMap<UUID,PartyData?>() //パーティのデータ PartyDataがnullじゃない人がリーダー
         val playNow = ArrayList<UUID>() //ダンジョンに挑戦中のプレイヤー
 
+        var joiningNow = false
+
         fun CommandSender.sendPrefixMsg(str: SStr){
             this.sendMessage(prefix + str)
         }
