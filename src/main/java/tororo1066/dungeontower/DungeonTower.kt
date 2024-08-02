@@ -133,6 +133,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
                 it.value!!.players.remove(e.player.uniqueId)
             }
             partiesData.remove(e.player.uniqueId)
+            DungeonCommand.entryCooldown.remove(e.player.uniqueId)
         }
 
         server.messenger.registerOutgoingPluginChannel(this,"BungeeCord")

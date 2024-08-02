@@ -86,7 +86,7 @@ class LootData: LootTable, Cloneable {
                     returnItems.add(dungeonItem.clone().setItemAmount(amount))
                     continue@first
                 }
-                preventRandom = item.first
+                preventRandom += item.first
             }
         }
         return returnItems

@@ -24,7 +24,7 @@ class BuffSkill: AbstractPerk("convenience", Skill.CONVENIENCE_MIDDLE_3, cost = 
 
     override fun getSkillDescription(): List<String> {
         return listOf(
-            "§7自身の攻撃力、防御力を上げる魔法が使えるようになる"
+            "§7自身の防御力を上げる魔法が使えるようになる"
         )
     }
 

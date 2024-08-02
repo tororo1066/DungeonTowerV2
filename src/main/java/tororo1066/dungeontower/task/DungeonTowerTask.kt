@@ -183,7 +183,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                     val floor = getInFloor(nowFloor, e.player)?:return@register
                     e.player.sendDebug("UpFloor", floor.internalName)
                     if (!floor.checkClear()) {
-                        if (floor.cancelStandOnStairs) {
+                        if (floor.cancelStandOnStairs && e.player.world == DungeonTower.dungeonWorld) {
                             e.isCancelled = true
                         }
                         return@register
@@ -216,6 +216,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                                 party.teleport(nowFloor.previousFloorStairs.random().add(0.0,1.1,0.0))
                                 callCommand(nowFloor)
                                 previousFloor.removeFloor()
+                                party.invokePerk(ActionType.ENTER_FLOOR)
                                 party.alivePlayers.keys.forEach {
                                     moveLockPlayers.remove(it)
                                     stepItems(it.toPlayer()?:return@forEach)

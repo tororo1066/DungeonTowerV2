@@ -29,11 +29,11 @@ class JustGuardDurationUp: AbstractPerk("convenience", Skill.CONVENIENCE_SMALL_D
     override fun onAction(p: Player, action: ActionType, userData: UserData) {
         if (action == ActionType.ENTER_DUNGEON) {
             val perk = userData.perks.values.first { it::class.java == JustGuard::class.java } as JustGuard
-            perk.duration = 4L
+            perk.duration = 6L
         }
         if (action == ActionType.END_DUNGEON) {
             val perk = userData.perks.values.first { it::class.java == JustGuard::class.java } as JustGuard
-            perk.duration = 2L
+            perk.duration = 4L
         }
     }
 }

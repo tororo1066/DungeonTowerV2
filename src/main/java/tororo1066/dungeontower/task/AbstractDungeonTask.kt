@@ -89,6 +89,10 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         }
         val cursorItem = p.itemOnCursor
         clearDungeonItem(cursorItem)
+        clearDungeonItem(p.inventory.itemInOffHand)
+        p.openInventory.topInventory.forEach {
+            clearDungeonItem(it)
+        }
     }
 
     protected fun stepItems(p: Player){
@@ -112,6 +116,10 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         }
         val cursorItem = p.itemOnCursor
         stepItem(cursorItem)
+        stepItem(p.inventory.itemInOffHand)
+        p.openInventory.topInventory.forEach {
+            stepItem(it)
+        }
     }
 
     protected fun dungeonItemToItem(p: Player){
@@ -140,6 +148,10 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         }
         val cursorItem = p.itemOnCursor
         dungeonItemToItem(cursorItem)
+        dungeonItemToItem(p.inventory.itemInOffHand)
+        p.openInventory.topInventory.forEach {
+            dungeonItemToItem(it)
+        }
     }
 
     protected fun callCommand(floor: FloorData){

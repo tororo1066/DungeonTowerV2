@@ -45,6 +45,8 @@ class OnceHeal: AbstractPerk("convenience", Skill.CONVENIENCE_LARGE_2, cost = 1,
     override fun onAction(p: Player, action: ActionType, userData: UserData) {
         when(action) {
             ActionType.ENTER_FLOOR -> {
+                if (p.openInventory.topInventory.any { it?.itemMeta?.persistentDataContainer?.has(NamespacedKey(DungeonTower.plugin, "once_heal"), PersistentDataType.INTEGER) == true }) return
+                if (p.inventory.itemInOffHand.itemMeta?.persistentDataContainer?.has(NamespacedKey(DungeonTower.plugin, "once_heal"), PersistentDataType.INTEGER) == true) return
                 if (p.itemOnCursor.itemMeta?.persistentDataContainer?.has(NamespacedKey(DungeonTower.plugin, "once_heal"), PersistentDataType.INTEGER) == true) return
                 if (p.inventory.any { it?.itemMeta?.persistentDataContainer?.has(NamespacedKey(DungeonTower.plugin, "once_heal"), PersistentDataType.INTEGER) == true }) return
                 val item = SItem(Material.RED_DYE)

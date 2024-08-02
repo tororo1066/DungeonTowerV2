@@ -52,18 +52,17 @@ class TowerData: Cloneable {
     }
 
     fun entryTower(p: Player, partyData: PartyData): CompletableFuture<Void> {
-        if (DungeonTower.joiningNow) {
-            p.sendPrefixMsg(SStr("&4少し待ってから再度試してください"))
-            DungeonCommand.entryCooldown.remove(p.uniqueId)
-            return CompletableFuture.completedFuture(null)
-        }
-        DungeonTower.joiningNow = true
+//        if (DungeonTower.joiningNow) {
+//            p.sendPrefixMsg(SStr("&4少し待ってから再度試してください"))
+//            return CompletableFuture.completedFuture(null)
+//        }
+//        DungeonTower.joiningNow = true
         DungeonCommand.entryCooldown.add(p.uniqueId)
         return CompletableFuture.runAsync {
             val saveData = SaveDataDB.load(p.uniqueId).get().find { it.towerName == internalName }
             canChallenge(p, partyData, saveData).thenAcceptAsync { bool ->
                 if (!bool) {
-                    DungeonTower.joiningNow = false
+//                    DungeonTower.joiningNow = false
                     return@thenAcceptAsync
                 }
                 if (entryScript != null){
@@ -84,7 +83,7 @@ class TowerData: Cloneable {
                             "${DungeonTower.prefix}§4§l[ERROR] §r§c${scriptFile.file.name}の戻り値がStringではありません"
                         ), Server.BROADCAST_CHANNEL_ADMINISTRATIVE)
                         DungeonCommand.entryCooldown.remove(p.uniqueId)
-                        DungeonTower.joiningNow = false
+//                        DungeonTower.joiningNow = false
                         return@thenAcceptAsync
                     }
 
@@ -105,7 +104,9 @@ class TowerData: Cloneable {
                     }?.newInstance()?.apply {
                         saveData?.let {
                             it.floors[floorNum]?.find { find -> find["internalName"] == internalName }?.let { data ->
-                                loadData(data)
+                                if (shouldUseSaveData) {
+                                    loadData(data)
+                                }
                             }
                         }
                     }
@@ -127,7 +128,7 @@ class TowerData: Cloneable {
                 }
 
                 DungeonCommand.entryCooldown.remove(p.uniqueId)
-                DungeonTower.joiningNow = false
+//                DungeonTower.joiningNow = false
             }.join()
         }
     }
@@ -149,7 +150,6 @@ class TowerData: Cloneable {
 
         if (challengeScript != null){
             val scriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, "$challengeScript"))
-            scriptFile.debug = true
             scriptFile.publicVariables["name"] = p.name
             scriptFile.publicVariables["uuid"] = p.uniqueId.toString()
             scriptFile.publicVariables["ip"] = p.address.address.hostAddress
@@ -182,7 +182,8 @@ class TowerData: Cloneable {
         }
 
         if (challengeItem != null){
-            completableFuture = completableFuture.thenApplyAsync {
+            completableFuture = completableFuture.thenApplyAsync { bool ->
+                if (!bool) return@thenApplyAsync false
                 val filter = p.inventory.filter { it?.isSimilar(challengeItem) == true }
                 if (filter.isEmpty() || filter.sumOf { it.amount } < challengeItem!!.amount){
                     p.sendPrefixMsg(SStr("§c挑戦するためのアイテムがありません！"))

@@ -10,6 +10,7 @@ import org.bukkit.scheduler.BukkitTask
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.data.UserData
 import tororo1066.dungeontower.skilltree.AbstractPerk
+import tororo1066.dungeontower.skilltree.ActionType
 import tororo1066.dungeontower.skilltree.Skill
 import tororo1066.dungeontower.skilltree.PerkLocation
 
@@ -18,7 +19,7 @@ class JustGuard: AbstractPerk("convenience", Skill.CONVENIENCE_LARGE_1, cost = 1
 ) {
 
     var cooltime = 60L
-    var duration = 2L
+    var duration = 4L
 
     private var _task: BukkitTask? = null
 
@@ -47,7 +48,9 @@ class JustGuard: AbstractPerk("convenience", Skill.CONVENIENCE_LARGE_1, cost = 1
             if (cooldown) return@register
             if (e.player.uniqueId != p.uniqueId) return@register
             if (e.isSneaking){
+                e.player.spawnParticle(Particle.VILLAGER_HAPPY, e.player.location, 10, 0.5, 0.5, 0.5, 0.1)
                 blocking = true
+                cooldown = true
                 Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
                     blocking = false
                 }, duration)
@@ -66,6 +69,13 @@ class JustGuard: AbstractPerk("convenience", Skill.CONVENIENCE_LARGE_1, cost = 1
             player.spawnParticle(Particle.TOTEM, e.entity.location, 10, 0.5, 0.5, 0.5, 0.1)
             _task?.cancel()
             cooldown = false
+        }
+    }
+
+    override fun onAction(p: Player, action: ActionType, userData: UserData) {
+        if (action == ActionType.END_DUNGEON || action == ActionType.DIE) {
+            _task?.cancel()
+            sEvent.unregisterAll()
         }
     }
 }
