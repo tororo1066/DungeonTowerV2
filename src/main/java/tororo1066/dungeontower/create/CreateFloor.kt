@@ -1,5 +1,6 @@
 package tororo1066.dungeontower.create
 
+import org.bukkit.GameRule
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.configuration.file.YamlConfiguration
@@ -159,7 +160,7 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                                                         },
                                                     createInputItem(SItem(Material.DIAMOND_BLOCK).setDisplayName("§a実行回数を設定する")
                                                         .addLore("§d現在の値: ${commandClearTask.need}")
-                                                        .addLore("§e/dtask PlayerInRadius{<半径>}か/dtask <プレイヤー名>でカウントされる"),Int::class.java,"/<実行回数>") { int, _ ->
+                                                        .addLore("§e/dtask <partyUUID> countCommandTask <カウント数>でカウントされる"),Int::class.java,"/<実行回数>") { int, _ ->
                                                         commandClearTask.need = int
                                                         val commandTask = data.clearTask.find { it.type == FloorData.ClearTaskEnum.ENTER_COMMAND }
                                                         if (commandTask != null){
@@ -256,11 +257,11 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                                 DungeonTower.sInput.sendInputCUI(
                                     p,
                                     Int::class.java,
-                                    "§d確率を入れてください"
-                                ) { chance ->
-                                    data.subFloors.add(Pair(chance, str))
-                                    open(p)
-                                }
+                                    "§d確率を入れてください",
+                                    action = { chance ->
+                                        data.subFloors.add(Pair(chance, str))
+                                        open(p)
+                                    })
                             })
 
                             setResourceItems(items)
@@ -281,6 +282,62 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                 .setClickEvent {
                     data.cancelStandOnStairs = !data.cancelStandOnStairs
                     allRenderMenu(p)
+                },
+            SInventoryItem(Material.DARK_OAK_SIGN).setDisplayName("§bワールドのゲームルールを設定する")
+                .also {
+                    if (data.worldGameRules.isNotEmpty()) {
+                        it.addLore("§d現在の値:")
+                    }
+                    data.worldGameRules.forEach { (gameRule, value) ->
+                        it.addLore("§d$gameRule $value")
+                    }
+                }
+                .setCanClick(false)
+                .setClickEvent {
+                    val settingInv = object : LargeSInventory(SJavaPlugin.plugin, "ワールドのゲームルールを設定する"){
+
+                        override fun renderMenu(p: Player): Boolean {
+                            val items = arrayListOf<SInventoryItem>()
+
+                            data.worldGameRules.forEach { (gameRule, value) ->
+                                items.add(SInventoryItem(Material.REDSTONE_BLOCK)
+                                    .setDisplayName("§d${gameRule}§f,§6${value}")
+                                    .addLore("§cシフト左クリックで削除")
+                                    .setCanClick(false).setClickEvent second@ { e ->
+                                        if (e.click != ClickType.SHIFT_LEFT)return@second
+                                        data.worldGameRules.remove(gameRule)
+                                        allRenderMenu(p)
+                                    })
+                            }
+
+                            items.add(createInputItem(SItem(Material.EMERALD_BLOCK).setDisplayName("§a追加")
+                                .addLore("§a合計の確率:${data.subFloors.sumOf { sum -> sum.first }}/1000000"),
+                                String::class.java,
+                                "§dゲームルール名を入れてください",
+                                invOpenCancel = true
+                            ) { str, _ ->
+                                val gameRule = GameRule.getByName(str)
+                                if (gameRule == null) {
+                                    p.sendPrefixMsg(SStr("&cゲームルールが存在しません"))
+                                    open(p)
+                                    return@createInputItem
+                                }
+                                DungeonTower.sInput.sendInputCUI(
+                                    p,
+                                    gameRule.type,
+                                    "§d値を入れてください(${gameRule.type.simpleName})",
+                                    action = { value ->
+                                        data.worldGameRules[gameRule] = value
+                                        open(p)
+                                    })
+                            })
+
+                            setResourceItems(items)
+                            return true
+                        }
+                    }
+
+                    moveChildInventory(settingInv,p)
                 }
         )
 
@@ -344,6 +401,7 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
         config.set("subFloors",data.subFloors.map { "${it.first},${it.second}" })
         config.set("shouldUseSaveData",data.shouldUseSaveData)
         config.set("cancelStandOnStairs",data.cancelStandOnStairs)
+        config.set("worldGameRules",data.worldGameRules.mapKeys { it.key.name })
 
         SJavaPlugin.sConfig.asyncSaveConfig(config,"floors/${data.internalName}").thenAccept {
             if (it){

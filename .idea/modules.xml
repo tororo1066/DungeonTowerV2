@@ -4,10 +4,15 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/DungeonTower.iml" filepath="$PROJECT_DIR$/.idea/modules/DungeonTower.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/DungeonTower.main.iml" filepath="$PROJECT_DIR$/.idea/modules/DungeonTower.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/DungeonTower.main~1.iml" filepath="$PROJECT_DIR$/.idea/modules/DungeonTower.main~1.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/DungeonTower.main~2.iml" filepath="$PROJECT_DIR$/.idea/modules/DungeonTower.main~2.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/DungeonTower.test.iml" filepath="$PROJECT_DIR$/.idea/modules/DungeonTower.test.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/IdeaProjects.untitled43.DungeonTower.main.iml" filepath="$PROJECT_DIR$/.idea/modules/IdeaProjects.untitled43.DungeonTower.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/pansh.IdeaProjects.untitled43.DungeonTower.main.iml" filepath="$PROJECT_DIR$/.idea/modules/pansh.IdeaProjects.untitled43.DungeonTower.main.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/tororo1066.DungeonTower.main.iml" filepath="$PROJECT_DIR$/.idea/modules/tororo1066.DungeonTower.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/tororo1066.DungeonTower.test.iml" filepath="$PROJECT_DIR$/.idea/modules/tororo1066.DungeonTower.test.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/untitled43.DungeonTower.main.iml" filepath="$PROJECT_DIR$/.idea/modules/untitled43.DungeonTower.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/untitled43.DungeonTower.test.iml" filepath="$PROJECT_DIR$/.idea/modules/untitled43.DungeonTower.test.iml" />
     </modules>
   </component>
 </project>

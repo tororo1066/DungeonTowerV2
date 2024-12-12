@@ -3,9 +3,7 @@ package tororo1066.dungeontower.task
 import com.destroystokyo.paper.event.player.PlayerStopSpectatingEntityEvent
 import com.elmakers.mine.bukkit.api.event.PreCastEvent
 import net.kyori.adventure.text.Component
-import org.bukkit.Bukkit
-import org.bukkit.GameMode
-import org.bukkit.Material
+import org.bukkit.*
 import org.bukkit.event.entity.EntityResurrectEvent
 import org.bukkit.event.entity.EntityToggleGlideEvent
 import org.bukkit.event.entity.PlayerDeathEvent
@@ -27,6 +25,7 @@ import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.utils.DateType
 import tororo1066.tororopluginapi.utils.toJPNDateStr
 import tororo1066.tororopluginapi.utils.toPlayer
+import tororo1066.tororopluginapi.world.EmptyWorldGenerator
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
@@ -48,13 +47,24 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
 
     private var floorDisplay = tower.name
 
+    lateinit var world: World
+
     override fun onEnd(){
-        nowFloor.removeFloor()
+        nowFloor.removeFloor(world)
         end = true
         sEvent.unregisterAll()
         scoreboard.getObjective("DungeonTower")?.displaySlot = null
         scoreboard.getObjective("DungeonTower")?.unregister()
+        EmptyWorldGenerator.deleteWorld(world)
         interrupt()
+    }
+
+    fun editGameRules() {
+        nowFloor.worldGameRules.forEach { (rule, value) ->
+            @Suppress("DEPRECATION") //他にやり方が思いつかないので一旦これで
+            world.setGameRuleValue(rule.name, value.toString())
+        }
+        world.setGameRule(GameRule.DO_IMMEDIATE_RESPAWN, true) //仕様上必要
     }
 
     override fun run() {
@@ -66,10 +76,17 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
         TowerLogDB.insertPartyData(party)
         TowerLogDB.enterDungeon(party, tower.internalName)
         party.nowTask = this
+
         party.broadCast(SStr("&c${tower.name}&aにテレポート中..."))
+
         nowFloor = firstFloor?.first?:tower.randomFloor()
 
-        nowFloor.generateFloor(tower, nowFloorNum, rootParent).join()
+        runTask {
+            world = DungeonTower.worldGenerator.createEmptyWorld("dungeon")
+            editGameRules()
+        }
+
+        nowFloor.generateFloor(tower, world, nowFloorNum, rootParent).join()
         floorDisplay = nowFloor.getDisplayName(tower, nowFloorNum)
 
         party.loadPerk(tower.internalName).join()
@@ -101,7 +118,6 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
             data.isAlive = false
             data.invokePerk(ActionType.DIE)
             party.broadCast(SStr("&c&l${e.player.name}が死亡した..."))
-            e.player.spigot().respawn()
             for (p in party.players) {
                 val player = p.key.toPlayer()?:return@register
                 if (player.gameMode == GameMode.SPECTATOR && player.spectatorTarget == e.player){
@@ -183,7 +199,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                     val floor = getInFloor(nowFloor, e.player)?:return@register
                     e.player.sendDebug("UpFloor", floor.internalName)
                     if (!floor.checkClear()) {
-                        if (floor.cancelStandOnStairs && e.player.world == DungeonTower.dungeonWorld) {
+                        if (floor.cancelStandOnStairs) {
                             e.isCancelled = true
                         }
                         return@register
@@ -201,22 +217,22 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                         party.alivePlayers.keys.forEach {
                             moveLockPlayers.add(it)
                         }
-                        party.broadCast(SStr("&7転移中..."))//메시지
+                        party.broadCast(SStr("&7転移中..."))
 
                         nowFloorNum++
                         val previousFloor = nowFloor
                         nowFloor = floor.randomSubFloor()
-                        nowFloor.generateFloor(tower, nowFloorNum, rootParent).thenAccept {
+                        nowFloor.generateFloor(tower, world, nowFloorNum, rootParent).thenAccept {
                             floorDisplay = nowFloor.getDisplayName(tower, nowFloorNum)
                             DungeonTower.util.runTask {
-                                previousFloor.killMobs()
+                                previousFloor.killMobs(world)
+                                editGameRules()
                                 nowFloor.activate()
                                 party.smokeStan(60)
                                 unlockedChest = false
                                 party.teleport(nowFloor.previousFloorStairs.random().add(0.0,1.1,0.0))
                                 callCommand(nowFloor)
-                                previousFloor.removeFloor()
-                                party.invokePerk(ActionType.ENTER_FLOOR)
+                                previousFloor.removeFloor(world)
                                 party.alivePlayers.keys.forEach {
                                     moveLockPlayers.remove(it)
                                     stepItems(it.toPlayer()?:return@forEach)

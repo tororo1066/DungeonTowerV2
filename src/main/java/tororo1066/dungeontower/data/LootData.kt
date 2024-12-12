@@ -81,9 +81,9 @@ class LootData: LootTable, Cloneable {
                         }
                     }
                     (1..stackAmount).forEach { _ ->
-                        returnItems.add(dungeonItem.clone().setItemAmount(64))
+                        returnItems.add(dungeonItem.clone().setItemAmount(64).build())
                     }
-                    returnItems.add(dungeonItem.clone().setItemAmount(amount))
+                    returnItems.add(dungeonItem.clone().setItemAmount(amount).build())
                     continue@first
                 }
                 preventRandom += item.first
@@ -95,7 +95,7 @@ class LootData: LootTable, Cloneable {
     override fun fillInventory(inventory: Inventory, random: Random?, context: LootContext) {
         var items = populateLoot(random, context).toMutableList()
         for (i in items.size until inventory.size){
-            items.add(SItem(Material.BARRIER).setCustomData(DungeonTower.plugin,"dloot", PersistentDataType.STRING,"space"))
+            items.add(SItem(Material.BARRIER).setCustomData(DungeonTower.plugin,"dloot", PersistentDataType.STRING,"space").build())
         }
         items = items.shuffled(random?:Random()).toMutableList()
         for (item in items.withIndex()){

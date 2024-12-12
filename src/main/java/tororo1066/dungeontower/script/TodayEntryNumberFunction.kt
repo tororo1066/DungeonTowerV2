@@ -12,7 +12,7 @@ import java.util.Calendar
 @FunctionParameter(name = "uuid")
 @FunctionParameter(name = "ip")
 @FunctionParameter(name = "dungeon", isVarArg = true)
-class TodayClearNumberFunction: AbstractFunction() {
+class TodayEntryNumberFunction: AbstractFunction() {
 
     override fun evaluate(
         expression: Expression,
@@ -32,14 +32,15 @@ class TodayClearNumberFunction: AbstractFunction() {
             parameterValues[0].stringValue,
             parameterValues[1].stringValue,
             dungeons,
-            time
+            time,
+            "ENTER_DUNGEON"
         )
         return EvaluationValue(log, expression.configuration)
     }
 
     companion object {
         fun registerFunction(){
-            ScriptFile.functions["dt_today_clear"] = { TodayClearNumberFunction() }
+            ScriptFile.functions["dt_today_entry"] = { TodayEntryNumberFunction() }
         }
     }
 }

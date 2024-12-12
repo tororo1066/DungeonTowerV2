@@ -1,0 +1,25 @@
+name: DungeonTowerReMake
+version: "1.1"
+main: tororo1066.dungeontower.DungeonTower
+api-version: "1.20"
+loader: tororo1066.dungeontower.DependencyLoader
+
+dependencies:
+  server:
+    WorldEdit:
+      load: BEFORE
+    MythicMobs:
+      load: BEFORE
+    Magic:
+      load: BEFORE
+    DisplayMonitor:
+      load: BEFORE
+    Multiverse-Core:
+      load: BEFORE
+      required: false
+    Multiverse-Portals:
+      load: BEFORE
+      required: false
+    MultiWorld:
+      load: BEFORE
+      required: false

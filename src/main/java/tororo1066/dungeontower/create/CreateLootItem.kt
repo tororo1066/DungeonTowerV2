@@ -27,7 +27,7 @@ class CreateLootItem(
                 .setClickEvent { _ ->
                     val inv = object : SingleItemInventory(SJavaPlugin.plugin, "§aアイテムを設定する") {
                         init {
-                            nowItem = data.itemStack
+                            nowItem = data.itemStack.build()
                             onConfirm = Consumer { item ->
                                 data.itemStack = SItem(item)
                                 p.closeInventory()
@@ -93,7 +93,7 @@ class CreateLootItem(
 
     private fun save(p: Player) {
         val config = SJavaPlugin.sConfig.getConfig("lootItems/${data.internalName}") ?: YamlConfiguration()
-        config.set("itemStack", data.itemStack.asItemStack())
+        config.set("itemStack", data.itemStack.build())
         config.set("announce", data.announce)
         config.set("removeFloorCount", data.removeFloorCount)
         config.set("removeOnExit", data.removeOnExit)

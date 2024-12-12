@@ -21,7 +21,7 @@ class ClearNumberFunction: AbstractFunction() {
         val dungeons = parameterValues.drop(2).map { it.stringValue }.let {
             it.ifEmpty { null }
         }
-        val log = TowerLogDB.getClearCount(
+        val log = TowerLogDB.getCount(
             parameterValues[0].stringValue,
             parameterValues[1].stringValue,
             dungeons,

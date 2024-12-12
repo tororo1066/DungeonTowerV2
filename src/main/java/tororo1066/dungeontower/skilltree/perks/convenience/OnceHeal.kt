@@ -53,6 +53,7 @@ class OnceHeal: AbstractPerk("convenience", Skill.CONVENIENCE_LARGE_2, cost = 1,
                     .setDisplayName("§c§l治癒の風")
                     .addLore("§9体力を回復する")
                     .setCustomData(DungeonTower.plugin, "once_heal", PersistentDataType.INTEGER, 1)
+                    .build()
                 item.editMeta(PotionMeta::class.java) { meta ->
                     meta.color = Color.RED
                 }
@@ -76,7 +77,7 @@ class OnceHeal: AbstractPerk("convenience", Skill.CONVENIENCE_LARGE_2, cost = 1,
                     return@setInteractEvent true
                 }
 
-                p.inventory.addItem(interactItem)
+                p.inventory.addItem(item)
             }
 
             ActionType.END_DUNGEON, ActionType.DIE -> {

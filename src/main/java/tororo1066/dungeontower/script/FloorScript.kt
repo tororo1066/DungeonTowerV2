@@ -5,6 +5,7 @@ import com.ezylang.evalex.data.EvaluationValue
 import com.ezylang.evalex.functions.AbstractFunction
 import com.ezylang.evalex.functions.FunctionParameter
 import com.ezylang.evalex.parser.Token
+import org.bukkit.Bukkit
 import org.bukkit.Location
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.tororopluginapi.SDebug
@@ -67,7 +68,8 @@ object FloorScript {
         generateStep: Int,
         willGenerateFloors: List<String>,
         noGenerateFloors: List<String>,
-        generate: Boolean
+        generate: Boolean,
+        worldInstanceId: Int
     ): Pair<String, Double> {
         script ?: return floorName to rotate
         val scriptFile = scripts[script] ?: return floorName to rotate
@@ -87,6 +89,7 @@ object FloorScript {
             put("parent", parent.ifEmpty { null })
             put("uuid", uuid.toString())
             put("all", floors[uuid]?: listOf<Map<String, Any?>>())
+            put("worldInstanceId", worldInstanceId)
         }
         try {
             val result = scriptFile.start()
@@ -106,6 +109,7 @@ object FloorScript {
     @FunctionParameter(name = "allowConflictDistanceX")
     @FunctionParameter(name = "allowConflictDistanceY")
     @FunctionParameter(name = "allowConflictDistanceZ")
+    @FunctionParameter(name = "worldInstanceId")
     class ConflictFunction(private val scriptFile: ScriptFile): AbstractFunction() {
         @Suppress("UNCHECKED_CAST")
         override fun evaluate(
@@ -117,6 +121,8 @@ object FloorScript {
             val allowConflictDistanceX = parameterValues[1].numberValue.toInt()
             val allowConflictDistanceY = parameterValues[2].numberValue.toInt()
             val allowConflictDistanceZ = parameterValues[3].numberValue.toInt()
+            val worldInstanceId = parameterValues[4].numberValue.toInt()
+            val world = Bukkit.getWorld("${DungeonTower.plugin.name.lowercase()}_dungeon_${worldInstanceId}")
             val split = variable.split(",")
             val floorName = split[0]
             val rotate = (split.getOrNull(1)?.toDouble()?:0.0) + (scriptFile.publicVariables["baseRotate"] as? Double?:0.0)
@@ -124,7 +130,7 @@ object FloorScript {
             val (floorLocX, floorLocY, floorLocZ) = scriptFile.publicVariables["location"] as? List<Int>?:return EvaluationValue(false)
             SDebug.broadcastDebug("FloorScript", "FloorName: $floorName, Rotate: $rotate, Location: $floorLocX, $floorLocY, $floorLocZ")
             val (dungeonStartLoc, dungeonEndLoc) = floorData.calculateLocation(Location(
-                DungeonTower.dungeonWorld,
+                world,
                 floorLocX.toDouble(),
                 floorLocY.toDouble(),
                 floorLocZ.toDouble()

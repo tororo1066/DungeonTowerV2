@@ -16,25 +16,22 @@ import tororo1066.dungeontower.logging.TowerLogDB
 import tororo1066.dungeontower.save.SaveDataDB
 import tororo1066.dungeontower.script.ClearNumberFunction
 import tororo1066.dungeontower.script.FloorScript
+import tororo1066.dungeontower.script.TodayEntryNumberFunction
 import tororo1066.tororopluginapi.SInput
 import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.otherUtils.UsefulUtility
 import tororo1066.tororopluginapi.sEvent.SEvent
 import tororo1066.tororopluginapi.utils.sendMessage
+import tororo1066.tororopluginapi.world.EmptyWorldGenerator
 import java.util.UUID
 
 class DungeonTower: SJavaPlugin(UseOption.SConfig) {
 
     companion object{
         lateinit var plugin: DungeonTower
-        var nowX = 0 //ダンジョンができるごとにこの値はダンジョンのx分増える
-        var dungeonXSpace = 5 //ダンジョンごとの間隔 近すぎると弊害があるときには空けるべき
-        var xLimit = 10000 //nowXがこの数字を上回ったときにnowXを0にする 無駄すぎるチャンク生成を控える
         var y = 1 //ダンジョンのyの高さ
         var lobbyLocation: Location = Location(null,0.0,0.0,0.0)
-
-        lateinit var dungeonWorld: World
         lateinit var floorWorld: World
 
         val prefix = SStr("&b[&4Dungeon&cTower&b]&r")
@@ -42,6 +39,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         lateinit var magicAPI: MagicAPI //魔法API
         lateinit var sInput: SInput //入力マネージャー
         lateinit var util: UsefulUtility
+        lateinit var worldGenerator: EmptyWorldGenerator
 
         val lootItemData = HashMap<String,LootItemData>() //アイテムのデータ
         val lootData = HashMap<String,LootData>() //宝箱のデータ
@@ -59,12 +57,9 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
 
         fun reloadDungeonConfig(){
             plugin.reloadConfig()
-            xLimit = plugin.config.getInt("xLimit",10000)
             y = plugin.config.getInt("y",1)
-            Bukkit.getWorld(plugin.config.getString("dungeonWorld","dungeon")!!)?.let { dungeonWorld = it }
             Bukkit.getWorld(plugin.config.getString("floorWorld","world")!!)?.let { floorWorld = it }
             lobbyLocation = plugin.config.getLocation("lobbyLocation", Location(null,0.0,0.0,0.0))!!
-            dungeonXSpace = plugin.config.getInt("dungeonXSpace",5)
 
             floorData.clear()
             lootData.clear()
@@ -115,14 +110,14 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         magicAPI = Bukkit.getPluginManager().getPlugin("Magic") as MagicAPI
         sInput = SInput(this)
         util = UsefulUtility(this)
+        worldGenerator = EmptyWorldGenerator()
         reloadDungeonConfig()
-        val dungeonTaskCommand = DungeonTaskCommand()
-        getCommand("dungeontask")?.setExecutor(dungeonTaskCommand)
-        getCommand("dungeontask")?.tabCompleter = dungeonTaskCommand
         DungeonCommand()
+        DungeonTaskCommand()
         TowerLogDB()
         TodayClearNumberFunction.registerFunction()
         ClearNumberFunction.registerFunction()
+        TodayEntryNumberFunction.registerFunction()
         FloorScript.load()
 
         SEvent(this).register(PlayerQuitEvent::class.java, EventPriority.LOWEST) { e ->
@@ -137,5 +132,17 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         }
 
         server.messenger.registerOutgoingPluginChannel(this,"BungeeCord")
+
+        Bukkit.getWorlds().forEach {
+            if (it.name.startsWith("${name.lowercase()}_dungeon_")) {
+                Bukkit.unloadWorld(it, false)
+            }
+        }
+
+        Bukkit.getWorldContainer().listFiles()?.forEach {
+            if (it.name.startsWith("${name.lowercase()}_dungeon_")) {
+                it.deleteRecursively()
+            }
+        }
     }
 }

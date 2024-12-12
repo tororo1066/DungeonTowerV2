@@ -43,10 +43,12 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
                                 p.sendPrefixMsg(SStr("§cそのMythicMobは存在しません！"))
                                 return@createInputItem
                             }
-                            DungeonTower.sInput.sendInputCUI(p, Int::class.java, "§d確率を指定してください") { int ->
-                                data.mobs.add(Pair(int, mob))
-                                open(p)
-                            }
+                            DungeonTower.sInput.sendInputCUI(p, Int::class.java, "§d確率を指定してください",
+                                action = { int ->
+                                    data.mobs.add(Pair(int, mob))
+                                    open(p)
+                                }
+                            )
                         })
                         setResourceItems(items)
                         return true

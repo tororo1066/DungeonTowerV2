@@ -91,6 +91,14 @@ class FloorData: Cloneable {
 
     val joinCommands = ArrayList<String>()
 
+    val worldGameRules = mutableMapOf<GameRule<*>, Any>(
+        GameRule.DO_DAYLIGHT_CYCLE to false,
+        GameRule.DO_WEATHER_CYCLE to false,
+        GameRule.DO_MOB_SPAWNING to false,
+        GameRule.MOB_GRIEFING to false,
+        GameRule.KEEP_INVENTORY to true,
+    )
+
     val clearTask = ArrayList<ClearTask>()
     val spawnerClearTasks = HashMap<UUID,Boolean>()
 
@@ -113,7 +121,6 @@ class FloorData: Cloneable {
     var shouldUseSaveData = false
     var loadedSaveData = false
 
-    val chunkCache = HashMap<Pair<Int, Int>, ChunkSnapshot>()
     val dataBlocks = HashMap<Location, BlockState>()
 
     fun checkClear(): Boolean {
@@ -232,7 +239,7 @@ class FloorData: Cloneable {
 
         fun stop() {
             Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
-                DungeonTower.dungeonWorld.entities.filter { it.persistentDataContainer.get(
+                location.world.entities.filter { it.persistentDataContainer.get(
                     NamespacedKey(DungeonTower.plugin, "dmob"),
                     PersistentDataType.STRING) == uuid.toString() }.forEach {
                     it.remove()
@@ -308,23 +315,6 @@ class FloorData: Cloneable {
         return Pair(dungeonStartLoc, dungeonEndLoc)
     }
 
-    private fun noSaveGenerateFloor(towerData: TowerData, floorNum: Int) {
-        val location = Location(
-            DungeonTower.dungeonWorld,
-            DungeonTower.nowX.toDouble(),
-            DungeonTower.y.toDouble(),
-            0.0
-        )
-        DungeonTower.nowX += calculateDistance(towerData, location, 0.0, floorNum) + 1 + DungeonTower.dungeonXSpace
-        val newLocation = Location(
-            DungeonTower.dungeonWorld,
-            DungeonTower.nowX.toDouble(),
-            DungeonTower.y.toDouble(),
-            0.0
-        )
-        generateFloor(towerData, floorNum, newLocation, 0.0)
-    }
-
     data class ParallelFloorData(
         val floorName: String,
         val label: String,
@@ -373,7 +363,7 @@ class FloorData: Cloneable {
             Operations.complete(forwardExtentCopy)
 
 
-            WorldEdit.getInstance().newEditSession(BukkitWorld(DungeonTower.dungeonWorld)).use {
+            WorldEdit.getInstance().newEditSession(BukkitWorld(location.world)).use {
                 val operation = ClipboardHolder(clipboard)
                     .apply {
                         transform = transform.combine(AffineTransform()
@@ -580,7 +570,8 @@ class FloorData: Cloneable {
                 generateStep,
                 loadedParallelFloors.filter { it.generate }.map { it.label },
                 loadedParallelFloors.filter { !it.generate }.map { it.label },
-                data.generate
+                data.generate,
+                location.world.name.split("_").last().toInt()
             )
 
             if (floorName.isBlank()) return@forEach
@@ -610,47 +601,42 @@ class FloorData: Cloneable {
         return distance
     }
 
-    fun generateFloor(towerData: TowerData, floorNum: Int, uuid: UUID): CompletableFuture<Void> {
+    fun generateFloor(towerData: TowerData, world: World, floorNum: Int, playerUUID: UUID): CompletableFuture<Void> {
         return CompletableFuture.runAsync {
+            var save = false
             if (shouldUseSaveData) {
                 if (loadedSaveData) {
-                    noSaveGenerateFloor(towerData, floorNum)
-                    return@runAsync
+                    save = true
                 } else {
-                    SaveDataDB.load(uuid).get().find { it.towerName == towerData.internalName }?.let {
+                    SaveDataDB.load(playerUUID).get().find { it.towerName == towerData.internalName }?.let {
                         val floorData = it.floors[floorNum]?.find { floor ->
                             floor["internalName"] == internalName
                         }
                         if (floorData != null) {
                             if (loadData(floorData)) {
                                 SDebug.broadcastDebug(1, "Using SaveData for $internalName")
-                                noSaveGenerateFloor(towerData, floorNum)
-                                return@runAsync
+                                save = true
                             }
                         }
                     }
                 }
             }
             val location = Location(
-                DungeonTower.dungeonWorld,
-                DungeonTower.nowX.toDouble(),
+                world,
+                0.0,
                 DungeonTower.y.toDouble(),
                 0.0
             )
-            DungeonTower.nowX += calculateDistance(towerData, location, 0.0, floorNum) + 1 + DungeonTower.dungeonXSpace
-            val newLocation = Location(
-                DungeonTower.dungeonWorld,
-                DungeonTower.nowX.toDouble(),
-                DungeonTower.y.toDouble(),
-                0.0
-            )
-            generateFloor(towerData, floorNum, newLocation, 0.0)
-            SaveDataDB.save(
-                uuid,
-                towerData,
-                floor = this,
-                floorNum = floorNum
-            )
+            calculateDistance(towerData, location, 0.0, floorNum)
+            generateFloor(towerData, floorNum, location, 0.0)
+            if (save) {
+                SaveDataDB.save(
+                    playerUUID,
+                    towerData,
+                    floor = this,
+                    floorNum = floorNum
+                )
+            }
         }
     }
 
@@ -690,9 +676,9 @@ class FloorData: Cloneable {
         }
     }
 
-    fun killMobs() {
+    fun killMobs(world: World) {
         val helper = BukkitAPIHelper()
-        DungeonTower.dungeonWorld.entities.filter {
+        world.entities.filter {
             spawnerClearTasks.containsKey(
                 UUID.fromString(it.persistentDataContainer.get(
                     NamespacedKey(DungeonTower.plugin, "dmob"),
@@ -708,7 +694,7 @@ class FloorData: Cloneable {
         }
     }
 
-    fun removeFloor(){
+    fun removeFloor(world: World){
         spawners.forEach {
             it.stop()
         }
@@ -717,21 +703,21 @@ class FloorData: Cloneable {
         SDebug.broadcastDebug(5, "dungeonStartLoc: ${dungeonStartLoc?.toLocString(LocType.BLOCK_COMMA)}")
         SDebug.broadcastDebug(5, "dungeonEndLoc: ${dungeonEndLoc?.toLocString(LocType.BLOCK_COMMA)}")
 
-        WorldEdit.getInstance().newEditSession(BukkitWorld(DungeonTower.dungeonWorld)).use {
+        WorldEdit.getInstance().newEditSession(BukkitWorld(world)).use {
             val x = dungeonStartLoc!!.blockX
             val y = dungeonStartLoc!!.blockY
             val z = dungeonStartLoc!!.blockZ
             val endX = dungeonEndLoc!!.blockX
             val endY = dungeonEndLoc!!.blockY
             val endZ = dungeonEndLoc!!.blockZ
-            it.setBlocks(CuboidRegion(BukkitWorld(DungeonTower.dungeonWorld),
+            it.setBlocks(CuboidRegion(BukkitWorld(world),
                 BlockVector3.at(x,y,z),
                 BlockVector3.at(endX, endY, endZ)) as Set<BlockVector3>, BlockTypes.AIR!!.defaultState
             )
         }
 
         parallelFloors.forEach {
-            it.value.removeFloor()
+            it.value.removeFloor(world)
         }
     }
 
@@ -774,6 +760,14 @@ class FloorData: Cloneable {
             time = initialTime
             cancelStandOnStairs = yml.getBoolean("cancelStandOnStairs",true)
             joinCommands.addAll(yml.getStringList("joinCommands"))
+            val section = yml.getConfigurationSection("worldGameRules")
+            if (section != null) {
+                worldGameRules.clear()
+                section.getKeys(false).forEach {
+                    val rule = GameRule.getByName(it) ?: return@forEach
+                    worldGameRules[rule] = yml.get("worldGameRules.$it") ?: return@forEach
+                }
+            }
             yml.getStringList("clearTasks").forEach {
                 val split = it.split(",")
                 val taskEnum = ClearTaskEnum.valueOf(split[0].uppercase())
@@ -797,19 +791,6 @@ class FloorData: Cloneable {
         }
 
         return data
-    }
-
-    private fun loadChunks(): CompletableFuture<Void> {
-        val (lowX, _, lowZ, highX, _, highZ) = getPoints()
-
-        return CompletableFuture.runAsync {
-            for (x in (lowX..highX) step 16) {
-                for (z in (lowZ..highZ) step 16) {
-                    val chunk = DungeonTower.floorWorld.getChunkAtAsync(x, z).join()
-                    chunkCache[Pair(x / 16, z / 16)] = chunk.chunkSnapshot
-                }
-            }
-        }
     }
 
     private fun loadDataBlocks() {

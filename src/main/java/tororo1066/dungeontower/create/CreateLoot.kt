@@ -62,15 +62,17 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(data.
                                     }
 
                                     DungeonTower.sInput.sendInputCUI(
-                                        p, Int::class.java, "§d確率を設定してください(0~1000000)"
-                                    ) { int ->
-                                        DungeonTower.sInput.sendInputCUI(
-                                            p, IntProgression::class.java, "§d個数を入力してください(<最低>..<最高>)"
-                                        ) { intRange ->
-                                            data.items.add(Triple(int, intRange, lootItemData.internalName))
-                                            open(p)
+                                        p, Int::class.java, "§d確率を設定してください(0~1000000)",
+                                        action = { int ->
+                                            DungeonTower.sInput.sendInputCUI(
+                                                p, IntProgression::class.java, "§d個数を入力してください(<最低>..<最高>)",
+                                                action = { intRange ->
+                                                    data.items.add(Triple(int, intRange, lootItemData.internalName))
+                                                    open(p)
+                                                }
+                                            )
                                         }
-                                    }
+                                    )
                                 }
                             )
                         )

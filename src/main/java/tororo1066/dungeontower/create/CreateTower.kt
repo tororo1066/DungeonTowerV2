@@ -93,10 +93,12 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
                                 open(p)
                                 return@createInputItem
                             }
-                            DungeonTower.sInput.sendInputCUI(p,Int::class.java,"§d確率を入れてください") { chance ->
-                                data.firstFloor.add(Pair(chance,floor.newInstance()))
-                                open(p)
-                            }
+                            DungeonTower.sInput.sendInputCUI(p,Int::class.java,"§d確率を入れてください",
+                                action = { chance ->
+                                    data.firstFloor.add(Pair(chance,floor.newInstance()))
+                                    open(p)
+                                }
+                            )
                         })
                         setResourceItems(items)
                         return true

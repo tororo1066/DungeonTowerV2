@@ -51,6 +51,7 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
     }
 
     val sEvent = SEvent(DungeonTower.plugin)
+    var lobbyLocation = DungeonTower.lobbyLocation
 
 
     protected fun runTask(unit: ()->Unit){
@@ -189,7 +190,7 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
     }
 
     protected fun end(delay: Long = 60) {
-        Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
+        val function = {
             party.players.forEach { (uuid, data) ->
                 data.invokePerk(ActionType.END_DUNGEON)
                 val p = uuid.toPlayer()
@@ -200,13 +201,20 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
                     p.spectatorTarget = null
                     p.gameMode = GameMode.SURVIVAL
                 }
-                p?.teleport(DungeonTower.lobbyLocation)
+                p?.teleport(lobbyLocation)
                 p?.scoreboard?.clearSlot(DisplaySlot.SIDEBAR)
                 DungeonTower.partiesData.remove(uuid)
                 DungeonTower.playNow.remove(uuid)
             }
             onEnd()
-        },delay)
+        }
+        if (delay == 0L){
+            function.invoke()
+        } else {
+            Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
+                function.invoke()
+            }, delay)
+        }
     }
 
     protected fun getInFloor(mainFloor: FloorData, p: Player): FloorData? {

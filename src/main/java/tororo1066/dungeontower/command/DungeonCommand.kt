@@ -30,13 +30,39 @@ import java.util.concurrent.CompletableFuture
 import kotlin.math.min
 
 @Suppress("unused")
-class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon.user") {
+class DungeonCommand: SCommand(
+    "dungeon",
+    prefix = DungeonTower.prefix.toString(),
+    perm = "dungeon.user",
+    alias = listOf("tower", "dt")
+) {
 
     companion object{
         val accepts = HashMap<UUID,ArrayList<UUID>>()
         val entryCooldown = ArrayList<UUID>()
         val givingPerkPoint = ArrayList<UUID>()
         val perkOpeningPlayers = HashMap<UUID, ActionBarBaseGUI>()
+
+        fun showHelp(sender: CommandSender, label: String){
+            sender.sendMessage(SStr("&c==================== &bDungeonTower &c===================="))
+            sender.sendMessage(SStr("&7/${label} entry <ダンジョン名> &dダンジョンに挑戦する"))
+            sender.sendMessage(SStr("&7/${label} party &dパーティのヘルプを表示する"))
+            if (sender.hasPermission("dungeon.op")){
+                sender.sendMessage(SStr("&7/${label} setLobby &d立っているところをロビーにする"))
+                sender.sendMessage(SStr("&7/${label} wand &dフロアを作成する杖を入手する(右で選択、左でクリア)"))
+                sender.sendMessage(SStr("&7/${label} create &dダンジョンを作成するヘルプを表示する"))
+                sender.sendMessage(SStr("&7/${label} edit &dダンジョンを編集するヘルプを表示する"))
+            }
+            sender.sendMessage(SStr("&c==================== &bDungeonTower &c===================="))
+        }
+
+        fun CommandSender.checkIllegal(string: String): Boolean {
+            if (StrExcludeFileIllegalCharacter(string).nullableString == null){
+                this.sendPrefixMsg(SStr("&c${string}は使用できません"))
+                return false
+            }
+            return true
+        }
     }
 
     init {
@@ -45,28 +71,8 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
         setCommandNoFoundEvent {
             showHelp(it.sender,it.label)
         }
+        SDebug.debugType.add("DungeonTask")
         registerDebugCommand("dungeon.op")
-    }
-
-    private fun CommandSender.checkIllegal(string: String): Boolean {
-        if (StrExcludeFileIllegalCharacter(string).nullableString == null){
-            this.sendPrefixMsg(SStr("&c${string}は使用できません"))
-            return false
-        }
-        return true
-    }
-
-    private fun showHelp(sender: CommandSender, label: String){
-        sender.sendMessage(SStr("&c==================== &bDungeonTower &c===================="))
-        sender.sendMessage(SStr("&7/${label} entry <ダンジョン名> &dダンジョンに挑戦する"))
-        sender.sendMessage(SStr("&7/${label} party &dパーティのヘルプを表示する"))
-        if (sender.hasPermission("dungeon.op")){
-            sender.sendMessage(SStr("&7/${label} setLobby &d立っているところをロビーにする"))
-            sender.sendMessage(SStr("&7/${label} wand &dフロアを作成する杖を入手する(右で選択、左でクリア)"))
-            sender.sendMessage(SStr("&7/${label} create &dダンジョンを作成するヘルプを表示する"))
-            sender.sendMessage(SStr("&7/${label} edit &dダンジョンを編集するヘルプを表示する"))
-        }
-        sender.sendMessage(SStr("&c==================== &bDungeonTower &c===================="))
     }
 
     @SCommandBody
@@ -363,7 +369,7 @@ class DungeonCommand: SCommand("dungeon",DungeonTower.prefix.toString(),"dungeon
         val item = SItem(Material.STICK).setDisplayName("§a範囲を指定するわんど...みたいな").setCustomData(
             DungeonTower.plugin,"wand",
             PersistentDataType.INTEGER,1)
-        it.sender.inventory.setItemInMainHand(item)
+        it.sender.inventory.setItemInMainHand(item.build())
         it.sender.sendPrefixMsg(SStr("&aプレゼント"))
     }
 
