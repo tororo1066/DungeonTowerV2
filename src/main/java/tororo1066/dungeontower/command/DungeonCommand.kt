@@ -10,7 +10,6 @@ import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.DungeonTower.Companion.sendPrefixMsg
 import tororo1066.dungeontower.create.*
 import tororo1066.dungeontower.data.*
-import tororo1066.dungeontower.inventory.RuleInventory
 import tororo1066.dungeontower.save.SaveDataDB
 import tororo1066.dungeontower.skilltree.AbstractPerk
 import tororo1066.dungeontower.skilltree.ActionBarBaseGUI
@@ -37,7 +36,7 @@ class DungeonCommand: SCommand(
     alias = listOf("tower", "dt")
 ) {
 
-    companion object{
+    companion object {
         val accepts = HashMap<UUID,ArrayList<UUID>>()
         val entryCooldown = ArrayList<UUID>()
         val givingPerkPoint = ArrayList<UUID>()
@@ -79,12 +78,6 @@ class DungeonCommand: SCommand(
     val help = command().setNormalExecutor {
         showHelp(it.sender,it.label)
     }
-
-    @SCommandBody
-    val rule = command().addArg(SCommandArg("rule"))
-        .setPlayerExecutor {
-            RuleInventory().open(it.sender)
-        }
 
     @SCommandBody("dungeon.user.perk")
     val showPerkMenu = command().addArg(SCommandArg("showPerk"))

@@ -8,9 +8,12 @@ import org.bukkit.World
 import org.bukkit.command.CommandSender
 import org.bukkit.event.EventPriority
 import org.bukkit.event.player.PlayerQuitEvent
+import tororo1066.displaymonitor.storage.ActionStorage
 import tororo1066.dungeontower.command.DungeonCommand
-import tororo1066.dungeontower.command.DungeonTaskCommand
 import tororo1066.dungeontower.data.*
+import tororo1066.dungeontower.dmonitor.FinishTaskAction
+import tororo1066.dungeontower.dmonitor.SetScoreboardLine
+import tororo1066.dungeontower.dmonitor.TargetParty
 import tororo1066.dungeontower.script.TodayClearNumberFunction
 import tororo1066.dungeontower.logging.TowerLogDB
 import tororo1066.dungeontower.save.SaveDataDB
@@ -20,6 +23,7 @@ import tororo1066.dungeontower.script.TodayEntryNumberFunction
 import tororo1066.tororopluginapi.SInput
 import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
+import tororo1066.tororopluginapi.otherPlugin.SWorldGuardAPI
 import tororo1066.tororopluginapi.otherUtils.UsefulUtility
 import tororo1066.tororopluginapi.sEvent.SEvent
 import tororo1066.tororopluginapi.utils.sendMessage
@@ -40,6 +44,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         lateinit var sInput: SInput //入力マネージャー
         lateinit var util: UsefulUtility
         lateinit var worldGenerator: EmptyWorldGenerator
+        lateinit var sWorldGuard: SWorldGuardAPI
 
         val lootItemData = HashMap<String,LootItemData>() //アイテムのデータ
         val lootData = HashMap<String,LootData>() //宝箱のデータ
@@ -48,8 +53,6 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         val towerData = HashMap<String,TowerData>() //塔のデータ
         val partiesData = HashMap<UUID,PartyData?>() //パーティのデータ PartyDataがnullじゃない人がリーダー
         val playNow = ArrayList<UUID>() //ダンジョンに挑戦中のプレイヤー
-
-        var joiningNow = false
 
         fun CommandSender.sendPrefixMsg(str: SStr){
             this.sendMessage(prefix + str)
@@ -111,14 +114,18 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         sInput = SInput(this)
         util = UsefulUtility(this)
         worldGenerator = EmptyWorldGenerator()
+        sWorldGuard = SWorldGuardAPI()
         reloadDungeonConfig()
         DungeonCommand()
-        DungeonTaskCommand()
         TowerLogDB()
         TodayClearNumberFunction.registerFunction()
         ClearNumberFunction.registerFunction()
         TodayEntryNumberFunction.registerFunction()
         FloorScript.load()
+
+        ActionStorage.registerAction("FinishTask", FinishTaskAction::class.java)
+        ActionStorage.registerAction("SetScoreboardLine", SetScoreboardLine::class.java)
+        ActionStorage.registerAction("TargetParty", TargetParty::class.java)
 
         SEvent(this).register(PlayerQuitEvent::class.java, EventPriority.LOWEST) { e ->
             if (playNow.contains(e.player.uniqueId))return@register

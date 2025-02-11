@@ -50,18 +50,19 @@ dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT'
     compileOnly "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     api fileTree(dir: 'libs', include: '*.jar')
-    api 'tororo1066:tororopluginapi:75d4859'
-    compileOnly 'tororo1066:base:75d4859'
-    compileOnly 'tororo1066:commandapi:75d4859'
+    api 'tororo1066:tororopluginapi:471710c'
+    compileOnly 'tororo1066:base:471710c'
+    compileOnly 'tororo1066:commandapi:471710c'
     compileOnly "io.lumine:Mythic-Dist:5.0.4-SNAPSHOT"
 //    compileOnly 'com.sk89q.worldedit:worldedit-bukkit:7.2.9'
     implementation(platform("com.intellectualsites.bom:bom-newest:1.44"))
     compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core")
     compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit") { transitive = false }
+    compileOnly 'com.sk89q.worldguard:worldguard-bukkit:7.0.9'
     compileOnly 'com.elmakers.mine.bukkit:MagicAPI:10.2'
     compileOnly 'com.ezylang:EvalEx:3.1.2'
-    compileOnly 'org.mongodb:mongodb-driver-sync:4.11.1'
-    compileOnly 'tororo1066:displaymonitor:19768aa'
+    implementation 'org.mongodb:mongodb-driver-sync:4.11.1'
+    compileOnly 'tororo1066:displaymonitor:814e7b9'
 }
 
 import org.apache.tools.ant.filters.ReplaceTokens
@@ -103,5 +104,7 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 shadowJar {
+    relocate("com.mongodb", "tororo1066.libs.com.mongodb")
+    relocate("org.bson", "tororo1066.libs.org.bson")
     archiveFileName.set("${project.name}-${project.version}.jar")
 }

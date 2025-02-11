@@ -10,9 +10,9 @@ public class DependencyLoader extends AbstractDependencyLoader {
     @Override
     public Library[] getDependencies() {
         return new Library[]{
-                LibraryType.KOTLIN.createLibrary(),
+//                LibraryType.KOTLIN_JDK8.createLibrary(),
                 LibraryType.EVALEX.createLibrary(),
-                LibraryType.MONGODB.createLibrary()
+//                LibraryType.MONGODB.createLibrary()
         };
     }
 }

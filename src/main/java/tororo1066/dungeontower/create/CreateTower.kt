@@ -1,5 +1,6 @@
 package tororo1066.dungeontower.create
 
+import org.bukkit.GameRule
 import org.bukkit.Material
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
@@ -97,6 +98,9 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
                                 action = { chance ->
                                     data.firstFloor.add(Pair(chance,floor.newInstance()))
                                     open(p)
+                                },
+                                onCancel = {
+                                    open(p)
                                 }
                             )
                         })
@@ -135,7 +139,107 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
             createInputItem(SItem(Material.PINK_WOOL).setDisplayName("§a並列最大人数を設定する")
                 .addLore("§d現在の値:${data.playerLimit}"),Int::class.java) { int, _ ->
                 data.playerLimit = int
-            }
+            },
+            SInventoryItem(Material.DARK_OAK_SIGN).setDisplayName("§bワールドのゲームルールを設定する")
+                .also {
+                    if (data.worldGameRules.isNotEmpty()) {
+                        it.addLore("§d現在の値:")
+                    }
+                    data.worldGameRules.forEach { (gameRule, value) ->
+                        it.addLore("§d$gameRule $value")
+                    }
+                }
+                .setCanClick(false)
+                .setClickEvent {
+                    val settingInv = object : LargeSInventory(SJavaPlugin.plugin, "ワールドのゲームルールを設定する"){
+
+                        override fun renderMenu(p: Player): Boolean {
+                            val items = arrayListOf<SInventoryItem>()
+
+                            data.worldGameRules.forEach { (gameRule, value) ->
+                                items.add(SInventoryItem(Material.REDSTONE_BLOCK)
+                                    .setDisplayName("§d${gameRule.name}§f,§6${value}")
+                                    .addLore("§cシフト左クリックで削除")
+                                    .setCanClick(false).setClickEvent second@ { e ->
+                                        if (e.click != ClickType.SHIFT_LEFT)return@second
+                                        data.worldGameRules.remove(gameRule)
+                                        allRenderMenu(p)
+                                    })
+                            }
+
+                            items.add(createInputItem(SItem(Material.EMERALD_BLOCK).setDisplayName("§a追加"),
+                                String::class.java,
+                                "§dゲームルール名を入れてください",
+                                invOpenCancel = true
+                            ) { str, _ ->
+                                val gameRule = GameRule.getByName(str)
+                                if (gameRule == null) {
+                                    p.sendPrefixMsg(SStr("&cゲームルールが存在しません"))
+                                    open(p)
+                                    return@createInputItem
+                                }
+                                DungeonTower.sInput.sendInputCUI(
+                                    p,
+                                    gameRule.type,
+                                    "§d値を入れてください(${gameRule.name})",
+                                    action = { value ->
+                                        data.worldGameRules[gameRule] = value
+                                        open(p)
+                                    },
+                                    onCancel = {
+                                        open(p)
+                                    })
+                            })
+
+                            setResourceItems(items)
+                            return true
+                        }
+                    }
+
+                    moveChildInventory(settingInv,p)
+                },
+            SInventoryItem(Material.LAPIS_BLOCK).setDisplayName("§eWorldGuardのフラグを設定する")
+                .setCanClick(false)
+                .setClickEvent {
+                    val inv = object : LargeSInventory(SJavaPlugin.plugin, "WorldGuardのフラグを設定する") {
+                        override fun renderMenu(p: Player): Boolean {
+                            val items = arrayListOf<SInventoryItem>()
+                            data.regionFlags.forEach { (flag, value) ->
+                                items.add(SInventoryItem(Material.REDSTONE_BLOCK)
+                                    .setDisplayName("§d${flag}§f,§6${value}")
+                                    .addLore("§cシフト左クリックで削除")
+                                    .setCanClick(false).setClickEvent second@ { e ->
+                                        if (e.click != ClickType.SHIFT_LEFT)return@second
+                                        data.regionFlags.remove(flag)
+                                        allRenderMenu(p)
+                                    })
+                            }
+
+                            items.add(createInputItem(SItem(Material.EMERALD_BLOCK).setDisplayName("§a追加"),
+                                String::class.java,
+                                "§dフラグ名を入れてください",
+                                invOpenCancel = true
+                            ) { str, _ ->
+                                DungeonTower.sInput.sendInputCUI(
+                                    p,
+                                    String::class.java,
+                                    "§d値を入れてください",
+                                    action = { value ->
+                                        data.regionFlags[str] = value
+                                        open(p)
+                                    },
+                                    onCancel = {
+                                        open(p)
+                                    })
+                            })
+
+                            setResourceItems(items)
+                            return true
+                        }
+                    }
+
+                    moveChildInventory(inv,p)
+                }
         )
 
         if (isEdit){
@@ -177,8 +281,9 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
         config.set("levelModifierScript",data.levelModifierScript)
         config.set("floorDisplayScript",data.floorDisplayScript)
         config.set("playerLimit",data.playerLimit)
-
         config.set("firstFloor",data.firstFloor.map { "${it.first},${it.second.internalName}" })
+        config.set("worldGameRules",data.worldGameRules.mapKeys { it.key.name })
+        config.set("regionFlags",data.regionFlags)
 
         SJavaPlugin.sConfig.asyncSaveConfig(config,"towers/${data.internalName}").thenAccept {
             if (it){

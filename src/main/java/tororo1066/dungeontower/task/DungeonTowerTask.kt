@@ -2,6 +2,13 @@ package tororo1066.dungeontower.task
 
 import com.destroystokyo.paper.event.player.PlayerStopSpectatingEntityEvent
 import com.elmakers.mine.bukkit.api.event.PreCastEvent
+import com.sk89q.worldedit.bukkit.BukkitAdapter
+import com.sk89q.worldedit.bukkit.BukkitWorld
+import com.sk89q.worldguard.WorldGuard
+import com.sk89q.worldguard.protection.flags.Flag
+import com.sk89q.worldguard.protection.flags.FlagContext
+import com.sk89q.worldguard.protection.flags.Flags
+import com.sk89q.worldguard.protection.regions.ProtectedRegion
 import net.kyori.adventure.text.Component
 import org.bukkit.*
 import org.bukkit.event.entity.EntityResurrectEvent
@@ -13,6 +20,9 @@ import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerVelocityEvent
 import org.bukkit.scoreboard.Criteria
 import org.bukkit.scoreboard.DisplaySlot
+import tororo1066.displaymonitor.actions.ActionContext
+import tororo1066.displaymonitor.actions.PublicActionContext
+import tororo1066.displaymonitor.storage.ActionStorage
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.command.DungeonCommand
 import tororo1066.dungeontower.data.FloorData
@@ -37,7 +47,6 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
     private val nextFloorPlayers = HashMap<FloorData, ArrayList<UUID>>()
     private val goalPlayers = ArrayList<UUID>()
     private val moveLockPlayers = ArrayList<UUID>()
-    private var scoreboard = Bukkit.getScoreboardManager().newScoreboard
 
     private var end = false
     private var unlockedChest = false
@@ -49,26 +58,43 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
 
     lateinit var world: World
 
+    val scoreboardFormats = HashMap<UUID, ArrayList<String>>() //プレイヤーごとにスコアボードを持つ
+
+    val currentPlayerFloor = HashMap<UUID, FloorData>()
+    val enteredFloors = HashMap<UUID, ArrayList<FloorData>>()
+    val publicEnteredFloors = ArrayList<FloorData>()
+    val exitedFloors = HashMap<UUID, ArrayList<FloorData>>()
+    val publicExitedFloors = ArrayList<FloorData>()
+
     override fun onEnd(){
         nowFloor.removeFloor(world)
         end = true
         sEvent.unregisterAll()
-        scoreboard.getObjective("DungeonTower")?.displaySlot = null
-        scoreboard.getObjective("DungeonTower")?.unregister()
         EmptyWorldGenerator.deleteWorld(world)
         interrupt()
     }
 
-    fun editGameRules() {
-        nowFloor.worldGameRules.forEach { (rule, value) ->
-            @Suppress("DEPRECATION") //他にやり方が思いつかないので一旦これで
-            world.setGameRuleValue(rule.name, value.toString())
+    private fun complete(message: SStr) {
+        TowerLogDB.clearDungeon(party, tower.internalName)
+        party.broadCast(message)
+        party.players.keys.forEach {
+            if (!party.alivePlayers.containsKey(it)){
+                clearDungeonItems(it.toPlayer()?:return@forEach)
+                return@forEach
+            }
+            dungeonItemToItem(it.toPlayer()?:return@forEach)
         }
-        world.setGameRule(GameRule.DO_IMMEDIATE_RESPAWN, true) //仕様上必要
+        end(delay = 0)
+    }
+
+    private fun fail(message: SStr) {
+        TowerLogDB.annihilationDungeon(party, tower.internalName)
+        party.broadCast(message)
+        end()
     }
 
     override fun run() {
-        if (party.players.size == 0)return
+        if (party.players.size == 0) return
         party.players.keys.forEach {
             DungeonCommand.perkOpeningPlayers[it]?.stop()
             DungeonCommand.perkOpeningPlayers.remove(it)
@@ -83,10 +109,20 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
 
         runTask {
             world = DungeonTower.worldGenerator.createEmptyWorld("dungeon")
-            editGameRules()
+            tower.worldGameRules.forEach { (rule, value) ->
+                @Suppress("DEPRECATION") //他にやり方が思いつかないので一旦これで
+                world.setGameRuleValue(rule.name, value.toString())
+            }
+            world.setGameRule(GameRule.DO_IMMEDIATE_RESPAWN, true) //仕様上必要
+
+            DungeonTower.sWorldGuard.getRegion(
+                world, "__global__"
+            )?.let {
+                DungeonTower.sWorldGuard.setFlags(it, tower.regionFlags)
+            }
         }
 
-        nowFloor.generateFloor(tower, world, nowFloorNum, rootParent).join()
+        nowFloor.generateFloor(tower, world, nowFloorNum, rootParent, party).join()
         floorDisplay = nowFloor.getDisplayName(tower, nowFloorNum)
 
         party.loadPerk(tower.internalName).join()
@@ -198,7 +234,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                 Material.WARPED_STAIRS -> {
                     val floor = getInFloor(nowFloor, e.player)?:return@register
                     e.player.sendDebug("UpFloor", floor.internalName)
-                    if (!floor.checkClear()) {
+                    if (!floor.finished.get()) {
                         if (floor.cancelStandOnStairs) {
                             e.isCancelled = true
                         }
@@ -222,11 +258,10 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                         nowFloorNum++
                         val previousFloor = nowFloor
                         nowFloor = floor.randomSubFloor()
-                        nowFloor.generateFloor(tower, world, nowFloorNum, rootParent).thenAccept {
+                        nowFloor.generateFloor(tower, world, nowFloorNum, rootParent, party).thenAccept {
                             floorDisplay = nowFloor.getDisplayName(tower, nowFloorNum)
                             DungeonTower.util.runTask {
                                 previousFloor.killMobs(world)
-                                editGameRules()
                                 nowFloor.activate()
                                 party.smokeStan(60)
                                 unlockedChest = false
@@ -244,115 +279,202 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                 }
                 Material.DIAMOND_BLOCK -> {
                     val floor = getInFloor(nowFloor, e.player)?:return@register
-                    if (!floor.checkClear())return@register
+                    if (!floor.finished.get())return@register
                     goalPlayers.add(e.player.uniqueId)
                     if (party.alivePlayers.size / 2 < goalPlayers.size){
-                        TowerLogDB.clearDungeon(party, tower.internalName)
-                        party.broadCast(SStr("&a&lクリア！"))
-                        party.players.keys.forEach {
-                            if (!party.alivePlayers.containsKey(it)){
-                                clearDungeonItems(it.toPlayer()?:return@forEach)
-                                return@forEach
-                            }
-                            dungeonItemToItem(it.toPlayer()?:return@forEach)
-                        }
-                        end(delay = 0)
+//                        TowerLogDB.clearDungeon(party, tower.internalName)
+//                        party.broadCast(SStr("&a&lクリア！"))
+//                        party.players.keys.forEach {
+//                            if (!party.alivePlayers.containsKey(it)){
+//                                clearDungeonItems(it.toPlayer()?:return@forEach)
+//                                return@forEach
+//                            }
+//                            dungeonItemToItem(it.toPlayer()?:return@forEach)
+//                        }
+//                        end(delay = 0)
+                        complete(SStr("&a&lクリア！"))
                     }
                 }
                 else->{}
             }
         }
 
-        sEvent.register(PlayerItemConsumeEvent::class.java) { e ->
-            if (!party.players.containsKey(e.player.uniqueId))return@register
-            if (e.item.type == Material.GOLDEN_APPLE || e.item.type == Material.ENCHANTED_GOLDEN_APPLE){
-                e.isCancelled = true
-            }
-        }
+//        sEvent.register(PlayerItemConsumeEvent::class.java) { e ->
+//            if (!party.players.containsKey(e.player.uniqueId))return@register
+//            if (e.item.type == Material.GOLDEN_APPLE || e.item.type == Material.ENCHANTED_GOLDEN_APPLE){
+//                e.isCancelled = true
+//            }
+//        }
+//
+//        sEvent.register(EntityResurrectEvent::class.java) { e ->
+//            if (!party.players.containsKey(e.entity.uniqueId))return@register
+//            if (e.hand == null || e.isCancelled)return@register
+//            e.isCancelled = true
+//        }
 
-        sEvent.register(EntityResurrectEvent::class.java) { e ->
-            if (!party.players.containsKey(e.entity.uniqueId))return@register
-            if (e.hand == null || e.isCancelled)return@register
-            e.isCancelled = true
-        }
-
-        sEvent.register(PreCastEvent::class.java) { e ->
-            if (!party.players.containsKey(e.mage?.entity?.uniqueId))return@register
-            if (e.spell?.category?.name == "wing"){
-                e.mage.sendMessage("§cwingは使えません")
-                e.isCancelled = true
-            }
-        }
-
-        sEvent.register(EntityToggleGlideEvent::class.java) { e ->
-            if (!party.players.containsKey(e.entity.uniqueId))return@register
-            if (e.isGliding && !e.isCancelled){
-                e.entity.sendMessage("§cエリトラは使えません")
-                e.isCancelled = true
-            }
-        }
+//        sEvent.register(PreCastEvent::class.java) { e ->
+//            if (!party.players.containsKey(e.mage?.entity?.uniqueId))return@register
+//            if (e.spell?.category?.name == "wing"){
+//                e.mage.sendMessage("§cwingは使えません")
+//                e.isCancelled = true
+//            }
+//        }
+//
+//        sEvent.register(EntityToggleGlideEvent::class.java) { e ->
+//            if (!party.players.containsKey(e.entity.uniqueId))return@register
+//            if (e.isGliding && !e.isCancelled){
+//                e.entity.sendMessage("§cエリトラは使えません")
+//                e.isCancelled = true
+//            }
+//        }
 
 
         sleep(3000)
 
         while (!end){
+
             DungeonTower.util.runTask {
                 nowFloor.time--
-                scoreboard = Bukkit.getScoreboardManager().newScoreboard
 
-                val obj = scoreboard.registerNewObjective("DungeonTower", Criteria.DUMMY, Component.text(floorDisplay))
-                obj.displaySlot = DisplaySlot.SIDEBAR
+                for (uuid in party.players.keys) {
+                    val player = uuid.toPlayer()?:return@runTask
 
-                obj.getScore("§6タスク").score = 0
-                var scoreInt = -1
-                nowFloor.clearTask.forEach {
-                    obj.getScore(formatTask(nowFloor, it)).score = scoreInt
-                    scoreInt--
-                }
+                    val currentFloor = getInFloor(nowFloor, player)
+                    if (currentFloor != null){
+                        if (currentPlayerFloor[uuid] != currentFloor) {
+                            val previousFloor = currentPlayerFloor[uuid]
 
-                nowFloor.parallelFloors.forEach { floor ->
-                    floor.value.clearTask.forEach second@ { task ->
-                        if (task.scoreboardName.isBlank()) return@second
-                        obj.getScore(formatTask(floor.value, task)).score = scoreInt
-                    }
-                }
+                            if (!publicEnteredFloors.contains(currentFloor)) {
+                                publicEnteredFloors.add(currentFloor)
+                                ActionStorage.trigger("dungeon_first_enter_public", ActionContext(PublicActionContext()).apply {
+                                    this.target = player
+                                    this.prepareParameters.let {
+                                        it["party.uuid"] = party.partyUUID.toString()
+                                        it.putAll(currentFloor.generateParameters())
+                                    }
+                                }) { section ->
+                                    section.getString("floor") == currentFloor.internalName
+                                }
+                            }
 
-                obj.getScore(" ").score = scoreInt
-                scoreInt--
+                            if (!enteredFloors.computeIfAbsent(uuid) { arrayListOf() }.contains(currentFloor)) {
+                                enteredFloors[uuid]!!.add(currentFloor)
+                                ActionStorage.trigger("dungeon_first_enter_private", ActionContext(PublicActionContext()).apply {
+                                    this.target = player
+                                    this.prepareParameters.let {
+                                        it["party.uuid"] = party.partyUUID.toString()
+                                        it.putAll(currentFloor.generateParameters())
+                                    }
+                                }) { section ->
+                                    section.getString("floor") == currentFloor.internalName
+                                }
+                            }
 
-                obj.getScore("  §7残り時間" +
-                        " §a${
-                            if (nowFloor.time <= 0) "0秒" else nowFloor.time.toLong()
-                                .toJPNDateStr(DateType.SECOND,DateType.MINUTE,false)
-                        }").score = scoreInt
-                scoreInt--
+                            ActionStorage.trigger("dungeon_enter", ActionContext(PublicActionContext()).apply {
+                                this.target = player
+                                this.prepareParameters.let {
+                                    it["party.uuid"] = party.partyUUID.toString()
+                                    it.putAll(currentFloor.generateParameters())
+                                }
+                            }) { section ->
+                                section.getString("floor") == currentFloor.internalName
+                            }
 
-                obj.getScore("  ").score = scoreInt
-                scoreInt--
+                            //exit
+                            if (previousFloor != null) {
+                                if (!publicExitedFloors.contains(previousFloor)) {
+                                    publicExitedFloors.add(previousFloor)
+                                    ActionStorage.trigger("dungeon_first_exit_public", ActionContext(PublicActionContext()).apply {
+                                        this.target = player
+                                        this.prepareParameters.let {
+                                            it["party.uuid"] = party.partyUUID.toString()
+                                            it.putAll(previousFloor.generateParameters())
+                                        }
+                                    }) { section ->
+                                        section.getString("floor") == previousFloor.internalName
+                                    }
+                                }
 
-                party.alivePlayers.values.filter { it.uuid.toPlayer() != null }
-                    .sortedBy { it.uuid.toPlayer()?.health }
-                    .take(4).forEach {
-                        val health = "§c♥§a${it.uuid.toPlayer()!!.health.toInt()}"
-                        val builder = StringBuilder()
-                        for (i in 1..16 - it.mcid.length) {
-                            builder.append(" ")
+                                if (!exitedFloors.computeIfAbsent(uuid) { arrayListOf() }.contains(previousFloor)) {
+                                    exitedFloors[uuid]!!.add(previousFloor)
+                                    ActionStorage.trigger("dungeon_first_exit_private", ActionContext(PublicActionContext()).apply {
+                                        this.target = player
+                                        this.prepareParameters.let {
+                                            it["party.uuid"] = party.partyUUID.toString()
+                                            it.putAll(previousFloor.generateParameters())
+                                        }
+                                    }) { section ->
+                                        section.getString("floor") == previousFloor.internalName
+                                    }
+                                }
+
+                                ActionStorage.trigger("dungeon_exit", ActionContext(PublicActionContext()).apply {
+                                    this.target = player
+                                    this.prepareParameters.let {
+                                        it["party.uuid"] = party.partyUUID.toString()
+                                        it.putAll(previousFloor.generateParameters())
+                                    }
+                                }) { section ->
+                                    section.getString("floor") == previousFloor.internalName
+                                }
+                            }
                         }
-                        obj.getScore("§7$builder${it.mcid} $health").score = scoreInt
+                        currentPlayerFloor[uuid] = currentFloor
+                    } else {
+                        currentPlayerFloor.remove(uuid)
+                    }
+
+
+
+                    val scoreboard = Bukkit.getScoreboardManager().newScoreboard
+                    val obj = scoreboard.registerNewObjective("DungeonTower", Criteria.DUMMY, Component.text(floorDisplay))
+                    obj.displaySlot = DisplaySlot.SIDEBAR
+
+                    var scoreInt = -1
+
+                    scoreboardFormats[uuid]?.forEach {
+                        obj.getScore(it).score = scoreInt
                         scoreInt--
                     }
 
-                party.scoreboard(scoreboard)
-            }
+                    obj.getScore(" ").score = scoreInt
+                    scoreInt--
 
-            if (nowFloor.clearTask.none { !it.clear }){
-                if (!unlockedChest){
-                    unlockedChest = true
-                    Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
-                        nowFloor.unlockChest()
-                    })
+                    obj.getScore("  §7残り時間" +
+                            " §a${
+                                if (nowFloor.time <= 0) "0秒" else nowFloor.time.toLong()
+                                    .toJPNDateStr(DateType.SECOND,DateType.MINUTE,false)
+                            }").score = scoreInt
+                    scoreInt--
+
+                    obj.getScore("  ").score = scoreInt
+                    scoreInt--
+
+                    party.alivePlayers.values.filter {
+                        it.uuid.toPlayer() != null && it.uuid != uuid
+                    }.sortedBy { it.uuid.toPlayer()?.health }
+                        .take(4).forEach {
+                            val health = "§c♥§a${it.uuid.toPlayer()!!.health.toInt()}"
+                            val builder = StringBuilder()
+                            for (i in 1..16 - it.mcid.length) {
+                                builder.append(" ")
+                            }
+                            obj.getScore("§7$builder${it.mcid} $health").score = scoreInt
+                            scoreInt--
+                        }
+
+                    player.scoreboard = scoreboard
                 }
             }
+
+//            if (nowFloor.clearTask.none { !it.clear }){
+//                if (!unlockedChest){
+//                    unlockedChest = true
+//                    Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
+//                        nowFloor.unlockChest()
+//                    })
+//                }
+//            }
 
             if (nowFloor.time == 0){
                 runTask {

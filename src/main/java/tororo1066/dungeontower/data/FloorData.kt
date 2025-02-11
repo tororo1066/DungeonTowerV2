@@ -26,6 +26,10 @@ import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.loot.LootContext
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitRunnable
+import org.bukkit.util.Vector
+import tororo1066.displaymonitor.actions.ActionContext
+import tororo1066.displaymonitor.actions.PublicActionContext
+import tororo1066.displaymonitor.storage.ActionStorage
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.save.SaveDataDB
 import tororo1066.dungeontower.script.FloorScript
@@ -39,36 +43,12 @@ import java.io.File
 import java.util.Random
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.*
 import kotlin.random.nextInt
 import kotlin.system.measureTimeMillis
 
 class FloorData: Cloneable {
-
-    enum class ClearTaskEnum {
-        KILL_SPAWNER_MOBS,
-        ENTER_COMMAND
-    }
-
-    enum class ClearCondition(val displayName: String) {
-        CLEAR_PARENT("親フロアをクリア"),
-        CLEAR_PARENT_AND_SELF("親フロアと自身をクリア"),
-        CLEAR_PARALLEL("並列フロアをクリア"),
-        CLEAR_PARALLEL_AND_SELF("並列フロアと自身をクリア"),
-        CLEAR_ALL("全てクリア")
-    }
-
-    class ClearTask(
-        val type: ClearTaskEnum, var need: Int = 0,
-        var count: Int = 0, var clear: Boolean = false,
-        var scoreboardName: String = "", var clearScoreboardName: String = "",
-        var condition: ClearCondition = ClearCondition.CLEAR_ALL
-    ): Cloneable {
-
-        public override fun clone(): ClearTask {
-            return super.clone() as ClearTask
-        }
-    }
 
     var uuid: UUID? = null
 
@@ -87,20 +67,11 @@ class FloorData: Cloneable {
 
     val previousFloorStairs = ArrayList<Location>()
     val nextFloorStairs = ArrayList<Location>()//使わないかもしれない
-    val spawners = ArrayList<SpawnerRunnable>()
+    val spawners = HashMap<UUID, SpawnerRunnable>()
 
     val joinCommands = ArrayList<String>()
 
-    val worldGameRules = mutableMapOf<GameRule<*>, Any>(
-        GameRule.DO_DAYLIGHT_CYCLE to false,
-        GameRule.DO_WEATHER_CYCLE to false,
-        GameRule.DO_MOB_SPAWNING to false,
-        GameRule.MOB_GRIEFING to false,
-        GameRule.KEEP_INVENTORY to true,
-    )
-
-    val clearTask = ArrayList<ClearTask>()
-    val spawnerClearTasks = HashMap<UUID,Boolean>()
+    val finished = AtomicBoolean(false)
 
     val parallelFloors = HashMap<String, FloorData>()
     var parallelFloor = false
@@ -111,8 +82,8 @@ class FloorData: Cloneable {
     lateinit var parentData: FloorData
 
     val subFloors = ArrayList<Pair<Int, String>>()
-
-//    val waves = HashMap<Int,ArrayList<Pair<Int, WaveData>>>()
+    val regionFlags = mutableMapOf<String, String>()
+    var regionUUID = UUID.randomUUID()
 
     lateinit var yml: YamlConfiguration
 
@@ -122,34 +93,6 @@ class FloorData: Cloneable {
     var loadedSaveData = false
 
     val dataBlocks = HashMap<Location, BlockState>()
-
-    fun checkClear(): Boolean {
-        ClearTaskEnum.values().forEach {
-            if (!checkClear(it))return false
-        }
-        return true
-    }
-
-    fun checkClear(task: ClearTaskEnum): Boolean {
-        val find = clearTask.find { it.type == task }?:return true
-        when(find.condition){
-            ClearCondition.CLEAR_ALL -> {
-                return find.clear && parallelFloors.none { !it.value.checkClear(task) } && if (parallelFloor) parentData.checkClear(task) else true
-            }
-            ClearCondition.CLEAR_PARENT -> {
-                return !parallelFloor || parentData.checkClear(task)
-            }
-            ClearCondition.CLEAR_PARENT_AND_SELF -> {
-                return find.clear && (!parallelFloor || parentData.checkClear(task))
-            }
-            ClearCondition.CLEAR_PARALLEL -> {
-                return parallelFloors.none { !it.value.checkClear(task) }
-            }
-            ClearCondition.CLEAR_PARALLEL_AND_SELF -> {
-                return find.clear && parallelFloors.none { !it.value.checkClear(task) }
-            }
-        }
-    }
 
     fun randomSubFloor(): FloorData {
         val random = kotlin.random.Random.nextInt(1..1000000)
@@ -176,7 +119,7 @@ class FloorData: Cloneable {
         return result ?: towerData.name
     }
 
-    inner class SpawnerRunnable(val data: SpawnerData, val location: Location, val uuid: UUID, val towerData: TowerData, val floorName: String, val floorNum: Int) : BukkitRunnable() {
+    inner class SpawnerRunnable(val data: SpawnerData, val partyData: PartyData, val location: Location, val uuid: UUID, val towerData: TowerData, val floorName: String, val floorNum: Int) : BukkitRunnable() {
 
         private val sEvent = SEvent(DungeonTower.plugin)
         private val facing = when((location.block.blockData as EndPortalFrame).facing){
@@ -190,19 +133,25 @@ class FloorData: Cloneable {
         init {
             sEvent.register(EntityDeathEvent::class.java) { e ->
                 if (e.entity.persistentDataContainer[NamespacedKey(DungeonTower.plugin,"dmob"), PersistentDataType.STRING] != uuid.toString())return@register
-                data.kill++
-                if (data.kill <= data.navigateKill){
-                    val ksFind = clearTask.find { it.type == ClearTaskEnum.KILL_SPAWNER_MOBS }
-                    if (ksFind != null) ksFind.count += 1
-                }
-                if (data.kill >= data.navigateKill){
-                    spawnerClearTasks[uuid] = true
-                    if (spawnerClearTasks.values.none { !it }){
-                        clearTask.filter { it.type == ClearTaskEnum.KILL_SPAWNER_MOBS }.forEach {
-                            it.clear = true
+
+                ActionStorage.trigger(
+                    "dungeon_kill_spawner_mob",
+                    ActionContext(PublicActionContext()).apply {
+                        this.target = e.entity
+                        this.location = e.entity.location
+                        this.prepareParameters.let {
+                            it["floor.name"] = floorName
+                            it["floor.num"] = floorNum
+                            it["spawner.name"] = data.internalName
+                            it["spawner.kill"] = data.kill
+                            it["party.uuid"] = partyData.partyUUID.toString()
                         }
                     }
+                ) { section ->
+                    section.getString("floor") == floorName
                 }
+
+                data.kill++
             }
         }
 
@@ -248,15 +197,6 @@ class FloorData: Cloneable {
             sEvent.unregisterAll()
             cancel()
         }
-    }
-
-    fun getAllTask(): ArrayList<ClearTask> {
-        val list = ArrayList<ClearTask>()
-        list.addAll(clearTask)
-        parallelFloors.values.forEach {
-            list.addAll(it.getAllTask())
-        }
-        return list
     }
 
     private fun Location.toBlockVector3(): BlockVector3 {
@@ -326,12 +266,11 @@ class FloorData: Cloneable {
     )
 
     @Suppress("DEPRECATION")
-    private fun generateFloor(towerData: TowerData, floorNum: Int, location: Location, direction: Double) {
+    private fun generateFloor(towerData: TowerData, partyData: PartyData, floorNum: Int, location: Location, direction: Double) {
         SDebug.broadcastDebug(3, "GeneratingFloor $internalName (step: $generateStep) in ${location.blockX},${location.blockY},${location.blockZ} with direction $direction")
 
         previousFloorStairs.clear()
         nextFloorStairs.clear()
-        spawnerClearTasks.clear()
         spawners.clear()
         time = initialTime
 
@@ -434,12 +373,7 @@ class FloorData: Cloneable {
 
                                 locSave.block.blockData = portal
                                 val randUUID = UUID.randomUUID()
-                                spawnerClearTasks[randUUID] = spawner.navigateKill <= 0
-                                val find = clearTask.find { it.type == ClearTaskEnum.KILL_SPAWNER_MOBS }
-                                if (find != null) find.need += spawner.navigateKill
-                                spawners.add(
-                                    SpawnerRunnable(spawner, locSave, randUUID, towerData, internalName, floorNum)
-                                )
+                                spawners[randUUID] = SpawnerRunnable(spawner, partyData, locSave, randUUID, towerData, internalName, floorNum)
                             }
                         }
                         "floor" -> {
@@ -448,7 +382,7 @@ class FloorData: Cloneable {
                             val label = script?.let { let -> FloorScript.getLabelName(let) } ?: "${x},${y},${z}"
                             if (parallelFloors.containsKey(label)) {
                                 val floor = parallelFloors[label]!!
-                                floor.generateFloor(towerData, floorNum, placeLoc, floor.rotate)
+                                floor.generateFloor(towerData, partyData, floorNum, placeLoc, floor.rotate)
                             }
 
                             DungeonTower.util.runTask {
@@ -472,6 +406,15 @@ class FloorData: Cloneable {
                 else -> {}
             }
         }
+
+        DungeonTower.sWorldGuard.createRegion(
+            location.world, regionUUID.toString(),
+            dungeonStartLoc.toVector(), dungeonEndLoc.toVector()
+        ).thenAccept {
+            if (it != null) {
+                DungeonTower.sWorldGuard.setFlags(it, regionFlags)
+            }
+        }.join()
 
         generated = true
     }
@@ -601,7 +544,7 @@ class FloorData: Cloneable {
         return distance
     }
 
-    fun generateFloor(towerData: TowerData, world: World, floorNum: Int, playerUUID: UUID): CompletableFuture<Void> {
+    fun generateFloor(towerData: TowerData, world: World, floorNum: Int, playerUUID: UUID, partyData: PartyData): CompletableFuture<Void> {
         return CompletableFuture.runAsync {
             var save = false
             if (shouldUseSaveData) {
@@ -628,7 +571,7 @@ class FloorData: Cloneable {
                 0.0
             )
             calculateDistance(towerData, location, 0.0, floorNum)
-            generateFloor(towerData, floorNum, location, 0.0)
+            generateFloor(towerData, partyData, floorNum, location, 0.0)
             if (save) {
                 SaveDataDB.save(
                     playerUUID,
@@ -641,15 +584,15 @@ class FloorData: Cloneable {
     }
 
     fun activate() {
-        spawners.forEach {
+        spawners.values.forEach {
             it.runTaskTimer(DungeonTower.plugin, 1, 1)
         }
         parallelFloors.forEach {
             it.value.activate()
         }
-        if (clearTask.none { !it.clear }) {
-            unlockChest()
-        }
+//        if (clearTask.none { !it.clear }) {
+//            unlockChest()
+//        }
         return
     }
 
@@ -679,7 +622,7 @@ class FloorData: Cloneable {
     fun killMobs(world: World) {
         val helper = BukkitAPIHelper()
         world.entities.filter {
-            spawnerClearTasks.containsKey(
+            spawners.containsKey(
                 UUID.fromString(it.persistentDataContainer.get(
                     NamespacedKey(DungeonTower.plugin, "dmob"),
                     PersistentDataType.STRING)?:return@filter false)
@@ -695,7 +638,7 @@ class FloorData: Cloneable {
     }
 
     fun removeFloor(world: World){
-        spawners.forEach {
+        spawners.values.forEach {
             it.stop()
         }
         spawners.clear()
@@ -746,6 +689,25 @@ class FloorData: Cloneable {
         return true
     }
 
+    fun generateParameters(): Map<String, Any> {
+        val map = HashMap<String, Any>()
+        map["floor.name"] = internalName
+        map["floor.rotate"] = rotate
+        dungeonStartLoc?.let {
+            map["floor.startLoc.world"] = it.world.name
+            map["floor.startLoc.x"] = it.blockX
+            map["floor.startLoc.y"] = it.blockY
+            map["floor.startLoc.z"] = it.blockZ
+        }
+        dungeonEndLoc?.let {
+            map["floor.endLoc.world"] = it.world.name
+            map["floor.endLoc.x"] = it.blockX
+            map["floor.endLoc.y"] = it.blockY
+            map["floor.endLoc.z"] = it.blockZ
+        }
+        return map
+    }
+
 
     fun newInstance(): FloorData {
         val data = FloorData().apply {
@@ -760,25 +722,6 @@ class FloorData: Cloneable {
             time = initialTime
             cancelStandOnStairs = yml.getBoolean("cancelStandOnStairs",true)
             joinCommands.addAll(yml.getStringList("joinCommands"))
-            val section = yml.getConfigurationSection("worldGameRules")
-            if (section != null) {
-                worldGameRules.clear()
-                section.getKeys(false).forEach {
-                    val rule = GameRule.getByName(it) ?: return@forEach
-                    worldGameRules[rule] = yml.get("worldGameRules.$it") ?: return@forEach
-                }
-            }
-            yml.getStringList("clearTasks").forEach {
-                val split = it.split(",")
-                val taskEnum = ClearTaskEnum.valueOf(split[0].uppercase())
-                val task = ClearTask(taskEnum)
-                if (taskEnum == ClearTaskEnum.ENTER_COMMAND){
-                    task.need = split[1].toInt()
-                }
-                task.scoreboardName = split.reversed()[1]
-                task.clearScoreboardName = split.last()
-                clearTask.add(task)
-            }
             yml.getString("parallelFloorOrigin")?.let {
                 val split = it.split(",")
                 parallelFloorOrigin = Location(DungeonTower.floorWorld,split[0].toDouble(),split[1].toDouble(),split[2].toDouble())
@@ -788,6 +731,14 @@ class FloorData: Cloneable {
                 subFloors.add(Pair(split[0].toInt(),split[1]))
             }
             shouldUseSaveData = yml.getBoolean("shouldUseSaveData",false)
+            val flags = yml.getConfigurationSection("regionFlags")
+            if (flags != null) {
+                regionFlags.clear()
+                flags.getKeys(false).forEach {
+                    regionFlags[it] = yml.getString("regionFlags.$it") ?: return@forEach
+                }
+            }
+            regionUUID = UUID.randomUUID()
         }
 
         return data

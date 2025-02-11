@@ -168,27 +168,6 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         })
     }
 
-    protected fun formatTask(floor: FloorData, task: FloorData.ClearTask): String {
-        val replace = " " + (if (task.clear) task.clearScoreboardName else task.scoreboardName)
-            .replace("&", "§")
-            .replace("<and>", "&")
-            .replace("<spawnerNavigateNeed>", floor.getAllTask()
-                .filter { fil -> fil.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }
-                .sumOf { map -> map.need }.toString()
-            )
-            .replace("<spawnerNavigateCount>", floor.getAllTask()
-                .filter { fil -> fil.type == FloorData.ClearTaskEnum.KILL_SPAWNER_MOBS }
-                .sumOf { map -> map.count }.toString()
-            )
-            .replace("<gimmickNeed>", floor.getAllTask()
-                .find { find -> find.type == FloorData.ClearTaskEnum.ENTER_COMMAND }
-                ?.need.toString())
-            .replace("<gimmickCount>", floor.getAllTask()
-                .find { find -> find.type == FloorData.ClearTaskEnum.ENTER_COMMAND }
-                ?.count.toString())
-        return replace
-    }
-
     protected fun end(delay: Long = 60) {
         val function = {
             party.players.forEach { (uuid, data) ->
@@ -202,7 +181,7 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
                     p.gameMode = GameMode.SURVIVAL
                 }
                 p?.teleport(lobbyLocation)
-                p?.scoreboard?.clearSlot(DisplaySlot.SIDEBAR)
+                p?.scoreboard = Bukkit.getScoreboardManager().newScoreboard
                 DungeonTower.partiesData.remove(uuid)
                 DungeonTower.playNow.remove(uuid)
             }

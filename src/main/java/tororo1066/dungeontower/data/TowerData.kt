@@ -2,6 +2,7 @@ package tororo1066.dungeontower.data
 
 import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
+import org.bukkit.GameRule
 import org.bukkit.Server
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
@@ -38,6 +39,16 @@ class TowerData: Cloneable {
     var perkLimit = 0
 
     var playerLimit = -1
+
+    var regionFlags = mutableMapOf<String, String>()
+
+    val worldGameRules = mutableMapOf<GameRule<*>, Any>(
+        GameRule.DO_DAYLIGHT_CYCLE to false,
+        GameRule.DO_WEATHER_CYCLE to false,
+        GameRule.DO_MOB_SPAWNING to false,
+        GameRule.MOB_GRIEFING to false,
+        GameRule.KEEP_INVENTORY to true,
+    )
 
     fun randomFloor(): FloorData {
         val random = Random.nextInt(1..1000000)
@@ -236,6 +247,21 @@ class TowerData: Cloneable {
                 defaultPerkPoints = yml.getInt("defaultPerkPoints",0)
                 perkLimit = yml.getInt("perkLimit",0)
                 playerLimit = yml.getInt("playerLimit",-1)
+                val section = yml.getConfigurationSection("worldGameRules")
+                if (section != null) {
+                    worldGameRules.clear()
+                    section.getKeys(false).forEach {
+                        val rule = GameRule.getByName(it) ?: return@forEach
+                        worldGameRules[rule] = yml.get("worldGameRules.$it") ?: return@forEach
+                    }
+                }
+                val flags = yml.getConfigurationSection("regionFlags")
+                if (flags != null) {
+                    regionFlags.clear()
+                    flags.getKeys(false).forEach {
+                        regionFlags[it] = yml.getString("regionFlags.$it") ?: return@forEach
+                    }
+                }
             }
 
             return Pair(data.internalName, data)
