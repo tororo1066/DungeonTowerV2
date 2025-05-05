@@ -1,28 +1,14 @@
 package tororo1066.dungeontower.task
 
 import com.destroystokyo.paper.event.player.PlayerStopSpectatingEntityEvent
-import com.elmakers.mine.bukkit.api.event.PreCastEvent
-import com.sk89q.worldedit.bukkit.BukkitAdapter
-import com.sk89q.worldedit.bukkit.BukkitWorld
-import com.sk89q.worldguard.WorldGuard
-import com.sk89q.worldguard.protection.flags.Flag
-import com.sk89q.worldguard.protection.flags.FlagContext
-import com.sk89q.worldguard.protection.flags.Flags
-import com.sk89q.worldguard.protection.regions.ProtectedRegion
 import net.kyori.adventure.text.Component
 import org.bukkit.*
-import org.bukkit.event.entity.EntityResurrectEvent
-import org.bukkit.event.entity.EntityToggleGlideEvent
 import org.bukkit.event.entity.PlayerDeathEvent
-import org.bukkit.event.player.PlayerItemConsumeEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerVelocityEvent
 import org.bukkit.scoreboard.Criteria
 import org.bukkit.scoreboard.DisplaySlot
-import tororo1066.displaymonitor.actions.ActionContext
-import tororo1066.displaymonitor.actions.PublicActionContext
-import tororo1066.displaymonitor.storage.ActionStorage
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.command.DungeonCommand
 import tororo1066.dungeontower.data.FloorData
@@ -36,9 +22,7 @@ import tororo1066.tororopluginapi.utils.DateType
 import tororo1066.tororopluginapi.utils.toJPNDateStr
 import tororo1066.tororopluginapi.utils.toPlayer
 import tororo1066.tororopluginapi.world.EmptyWorldGenerator
-import java.util.*
-import kotlin.collections.ArrayList
-import kotlin.collections.HashMap
+import java.util.UUID
 
 class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<FloorData, Int>? = null): AbstractDungeonTask(party, tower) {
 
@@ -299,35 +283,6 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
             }
         }
 
-//        sEvent.register(PlayerItemConsumeEvent::class.java) { e ->
-//            if (!party.players.containsKey(e.player.uniqueId))return@register
-//            if (e.item.type == Material.GOLDEN_APPLE || e.item.type == Material.ENCHANTED_GOLDEN_APPLE){
-//                e.isCancelled = true
-//            }
-//        }
-//
-//        sEvent.register(EntityResurrectEvent::class.java) { e ->
-//            if (!party.players.containsKey(e.entity.uniqueId))return@register
-//            if (e.hand == null || e.isCancelled)return@register
-//            e.isCancelled = true
-//        }
-
-//        sEvent.register(PreCastEvent::class.java) { e ->
-//            if (!party.players.containsKey(e.mage?.entity?.uniqueId))return@register
-//            if (e.spell?.category?.name == "wing"){
-//                e.mage.sendMessage("§cwingは使えません")
-//                e.isCancelled = true
-//            }
-//        }
-//
-//        sEvent.register(EntityToggleGlideEvent::class.java) { e ->
-//            if (!party.players.containsKey(e.entity.uniqueId))return@register
-//            if (e.isGliding && !e.isCancelled){
-//                e.entity.sendMessage("§cエリトラは使えません")
-//                e.isCancelled = true
-//            }
-//        }
-
 
         sleep(3000)
 
@@ -346,7 +301,9 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
 
                             if (!publicEnteredFloors.contains(currentFloor)) {
                                 publicEnteredFloors.add(currentFloor)
-                                ActionStorage.trigger("dungeon_first_enter_public", ActionContext(PublicActionContext()).apply {
+                                DungeonTower.actionStorage.trigger("dungeon_first_enter_public", DungeonTower.actionStorage.createActionContext(
+                                    DungeonTower.actionStorage.createPublicContext()
+                                ).apply {
                                     this.target = player
                                     this.prepareParameters.let {
                                         it["party.uuid"] = party.partyUUID.toString()
@@ -359,7 +316,9 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
 
                             if (!enteredFloors.computeIfAbsent(uuid) { arrayListOf() }.contains(currentFloor)) {
                                 enteredFloors[uuid]!!.add(currentFloor)
-                                ActionStorage.trigger("dungeon_first_enter_private", ActionContext(PublicActionContext()).apply {
+                                DungeonTower.actionStorage.trigger("dungeon_first_enter_private", DungeonTower.actionStorage.createActionContext(
+                                    DungeonTower.actionStorage.createPublicContext()
+                                ).apply {
                                     this.target = player
                                     this.prepareParameters.let {
                                         it["party.uuid"] = party.partyUUID.toString()
@@ -370,7 +329,9 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                                 }
                             }
 
-                            ActionStorage.trigger("dungeon_enter", ActionContext(PublicActionContext()).apply {
+                            DungeonTower.actionStorage.trigger("dungeon_enter", DungeonTower.actionStorage.createActionContext(
+                                DungeonTower.actionStorage.createPublicContext()
+                            ).apply {
                                 this.target = player
                                 this.prepareParameters.let {
                                     it["party.uuid"] = party.partyUUID.toString()
@@ -384,7 +345,9 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                             if (previousFloor != null) {
                                 if (!publicExitedFloors.contains(previousFloor)) {
                                     publicExitedFloors.add(previousFloor)
-                                    ActionStorage.trigger("dungeon_first_exit_public", ActionContext(PublicActionContext()).apply {
+                                    DungeonTower.actionStorage.trigger("dungeon_first_exit_public", DungeonTower.actionStorage.createActionContext(
+                                        DungeonTower.actionStorage.createPublicContext()
+                                    ).apply {
                                         this.target = player
                                         this.prepareParameters.let {
                                             it["party.uuid"] = party.partyUUID.toString()
@@ -397,7 +360,9 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
 
                                 if (!exitedFloors.computeIfAbsent(uuid) { arrayListOf() }.contains(previousFloor)) {
                                     exitedFloors[uuid]!!.add(previousFloor)
-                                    ActionStorage.trigger("dungeon_first_exit_private", ActionContext(PublicActionContext()).apply {
+                                    DungeonTower.actionStorage.trigger("dungeon_first_exit_private", DungeonTower.actionStorage.createActionContext(
+                                        DungeonTower.actionStorage.createPublicContext()
+                                    ).apply {
                                         this.target = player
                                         this.prepareParameters.let {
                                             it["party.uuid"] = party.partyUUID.toString()
@@ -408,7 +373,9 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                                     }
                                 }
 
-                                ActionStorage.trigger("dungeon_exit", ActionContext(PublicActionContext()).apply {
+                                DungeonTower.actionStorage.trigger("dungeon_exit", DungeonTower.actionStorage.createActionContext(
+                                    DungeonTower.actionStorage.createPublicContext()
+                                ).apply {
                                     this.target = player
                                     this.prepareParameters.let {
                                         it["party.uuid"] = party.partyUUID.toString()

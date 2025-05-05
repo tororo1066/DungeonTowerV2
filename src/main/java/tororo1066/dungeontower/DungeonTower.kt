@@ -8,17 +8,22 @@ import org.bukkit.World
 import org.bukkit.command.CommandSender
 import org.bukkit.event.EventPriority
 import org.bukkit.event.player.PlayerQuitEvent
-import tororo1066.displaymonitor.storage.ActionStorage
+import tororo1066.displaymonitorapi.IDisplayMonitor
+import tororo1066.displaymonitorapi.configuration.IActionConfiguration
+import tororo1066.displaymonitorapi.storage.IActionStorage
 import tororo1066.dungeontower.command.DungeonCommand
 import tororo1066.dungeontower.data.*
+import tororo1066.dungeontower.data.loot.ItemLoot
+import tororo1066.dungeontower.data.loot.ShuffleLoot
+import tororo1066.dungeontower.data.loot.SupplyLoot
 import tororo1066.dungeontower.dmonitor.FinishTaskAction
 import tororo1066.dungeontower.dmonitor.SetScoreboardLine
 import tororo1066.dungeontower.dmonitor.TargetParty
-import tororo1066.dungeontower.script.TodayClearNumberFunction
 import tororo1066.dungeontower.logging.TowerLogDB
 import tororo1066.dungeontower.save.SaveDataDB
 import tororo1066.dungeontower.script.ClearNumberFunction
 import tororo1066.dungeontower.script.FloorScript
+import tororo1066.dungeontower.script.TodayClearNumberFunction
 import tororo1066.dungeontower.script.TodayEntryNumberFunction
 import tororo1066.tororopluginapi.SInput
 import tororo1066.tororopluginapi.SJavaPlugin
@@ -45,14 +50,21 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         lateinit var util: UsefulUtility
         lateinit var worldGenerator: EmptyWorldGenerator
         lateinit var sWorldGuard: SWorldGuardAPI
+        lateinit var actionStorage: IActionStorage
 
-        val lootItemData = HashMap<String,LootItemData>() //アイテムのデータ
-        val lootData = HashMap<String,LootData>() //宝箱のデータ
-        val spawnerData = HashMap<String,SpawnerData>() //スポナーのデータ
-        val floorData = HashMap<String,FloorData>() //フロアのデータ
-        val towerData = HashMap<String,TowerData>() //塔のデータ
-        val partiesData = HashMap<UUID,PartyData?>() //パーティのデータ PartyDataがnullじゃない人がリーダー
+        val lootData = HashMap<String, LootData>() //宝箱のデータ
+        val lootScripts = HashMap<String, IActionConfiguration>()
+        val spawnerData = HashMap<String, SpawnerData>() //スポナーのデータ
+        val floorData = HashMap<String, FloorData>() //フロアのデータ
+        val towerData = HashMap<String, TowerData>() //塔のデータ
+        val partiesData = HashMap<UUID, PartyData?>() //パーティのデータ PartyDataがnullじゃない人がリーダー
         val playNow = ArrayList<UUID>() //ダンジョンに挑戦中のプレイヤー
+
+        const val DUNGEON_LOOT_ITEM = "dlootitem"
+        const val DUNGEON_LOOT_ANNOUNCE = "dlootannounce"
+        const val DUNGEON_LOOT_REMOVE_FLOOR_COUNT = "dlootremovefloor"
+        const val DUNGEON_LOOT_REMOVE_ON_EXIT = "dlootremoveonexit"
+        const val DUNGEON_LOOT_REMOVE_ON_DEATH = "dlootremoveondeath"
 
         fun CommandSender.sendPrefixMsg(str: SStr){
             this.sendMessage(prefix + str)
@@ -68,17 +80,12 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
             lootData.clear()
             spawnerData.clear()
             towerData.clear()
+            lootScripts.clear()
 
             sConfig.mkdirs("floors")
             sConfig.loadAllFiles("floors").forEach {
                 val floor = FloorData.loadFromYml(it)
                 floorData[floor.first] = floor.second
-            }
-
-            sConfig.mkdirs("lootItems")
-            sConfig.loadAllFiles("lootItems").forEach {
-                val lootItem = LootItemData.loadFromYml(it)
-                lootItemData[lootItem.first] = lootItem.second
             }
 
             sConfig.mkdirs("loots")
@@ -99,6 +106,14 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
                 towerData[tower.first] = tower.second
             }
 
+            sConfig.mkdirs("DisplayMonitorScripts/loot")
+            sConfig.loadAllFiles("DisplayMonitorScripts/loot").forEach {
+                val loots = actionStorage.getActionConfigurations(it)
+                loots.forEach { loot ->
+                    lootScripts[loot.key] = loot
+                }
+            }
+
 
             DungeonCommand()
             TowerLogDB()
@@ -115,6 +130,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         util = UsefulUtility(this)
         worldGenerator = EmptyWorldGenerator()
         sWorldGuard = SWorldGuardAPI()
+        actionStorage = IDisplayMonitor.DisplayMonitorInstance.getInstance().actionStorage
         reloadDungeonConfig()
         DungeonCommand()
         TowerLogDB()
@@ -123,9 +139,13 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         TodayEntryNumberFunction.registerFunction()
         FloorScript.load()
 
-        ActionStorage.registerAction("FinishTask", FinishTaskAction::class.java)
-        ActionStorage.registerAction("SetScoreboardLine", SetScoreboardLine::class.java)
-        ActionStorage.registerAction("TargetParty", TargetParty::class.java)
+        actionStorage.registerAction("FinishTask", FinishTaskAction::class.java)
+        actionStorage.registerAction("SetScoreboardLine", SetScoreboardLine::class.java)
+        actionStorage.registerAction("TargetParty", TargetParty::class.java)
+
+        actionStorage.registerAction(SupplyLoot::class.java)
+        actionStorage.registerAction(ItemLoot::class.java)
+        actionStorage.registerAction(ShuffleLoot::class.java)
 
         SEvent(this).register(PlayerQuitEvent::class.java, EventPriority.LOWEST) { e ->
             if (playNow.contains(e.player.uniqueId))return@register
@@ -151,5 +171,9 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
                 it.deleteRecursively()
             }
         }
+    }
+
+    override fun onEnd() {
+
     }
 }

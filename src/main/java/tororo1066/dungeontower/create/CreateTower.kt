@@ -249,7 +249,7 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
                     p.closeInventory()
             })
             items.add(SInventoryItem(Material.BARRIER)
-                .setDisplayName("§cシフト右クリックで削除する").setClickEvent {
+                .setDisplayName("§cシフト右クリックで削除する").setCanClick(false).setClickEvent {
                     if (it.click != ClickType.SHIFT_RIGHT)return@setClickEvent
                     File(SJavaPlugin.plugin.dataFolder.path + "/towers/${data.internalName}.yml").delete()
                     DungeonTower.towerData.remove(data.internalName)

@@ -126,8 +126,8 @@ object FloorScript {
             val split = variable.split(",")
             val floorName = split[0]
             val rotate = (split.getOrNull(1)?.toDouble()?:0.0) + (scriptFile.publicVariables["baseRotate"] as? Double?:0.0)
-            val floorData = DungeonTower.floorData[floorName]?.newInstance()?:return EvaluationValue(true)
-            val (floorLocX, floorLocY, floorLocZ) = scriptFile.publicVariables["location"] as? List<Int>?:return EvaluationValue(false)
+            val floorData = DungeonTower.floorData[floorName]?.newInstance()?:return EvaluationValue(true, expression.configuration)
+            val (floorLocX, floorLocY, floorLocZ) = scriptFile.publicVariables["location"] as? List<Int>?:return EvaluationValue(false, expression.configuration)
             SDebug.broadcastDebug("FloorScript", "FloorName: $floorName, Rotate: $rotate, Location: $floorLocX, $floorLocY, $floorLocZ")
             val (dungeonStartLoc, dungeonEndLoc) = floorData.calculateLocation(Location(
                 world,
@@ -135,25 +135,25 @@ object FloorScript {
                 floorLocY.toDouble(),
                 floorLocZ.toDouble()
             ), rotate)
-            val uuidString = scriptFile.publicVariables["uuid"] as? String?:return EvaluationValue(false)
+            val uuidString = scriptFile.publicVariables["uuid"] as? String?:return EvaluationValue(false, expression.configuration)
             val uuid = UUID.fromString(uuidString)
-            val values = floors[uuid]?:return EvaluationValue(false)
+            val values = floors[uuid]?:return EvaluationValue(false, expression.configuration)
             values.forEach { value ->
-                val (startX, startY, startZ) = value["startLoc"] as? List<Int>?:return EvaluationValue(false)
-                val (endX, endY, endZ) = value["endLoc"] as? List<Int>?:return EvaluationValue(false)
+                val (startX, startY, startZ) = value["startLoc"] as? List<Int>?:return EvaluationValue(false, expression.configuration)
+                val (endX, endY, endZ) = value["endLoc"] as? List<Int>?:return EvaluationValue(false, expression.configuration)
                 for (x in dungeonStartLoc.blockX-allowConflictDistanceX..dungeonEndLoc.blockX-allowConflictDistanceX) {
                     for (y in dungeonStartLoc.blockY-allowConflictDistanceY..dungeonEndLoc.blockY-allowConflictDistanceY) {
                         for (z in dungeonStartLoc.blockZ-allowConflictDistanceZ..dungeonEndLoc.blockZ-allowConflictDistanceZ) {
                             if (x in startX..endX && y in startY..endY && z in startZ..endZ) {
                                 SDebug.broadcastDebug("FloorScript", "Conflict!")
-                                return EvaluationValue(true)
+                                return EvaluationValue(true, expression.configuration)
                             }
                         }
                     }
                 }
             }
 
-            return EvaluationValue(false)
+            return EvaluationValue(false, expression.configuration)
         }
     }
 }

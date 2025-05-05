@@ -76,22 +76,20 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
             if (itemStack == null) return
             if (itemStack.type.isAir || !itemStack.hasItemMeta()) return
             val sItem = SItem(itemStack)
-            if (sItem.getCustomData(DungeonTower.plugin, "dlootitem", PersistentDataType.INTEGER) != null) {
-                if (sItem.getCustomData(DungeonTower.plugin, "dlootremoveondeath", PersistentDataType.INTEGER) != null) {
+            if (sItem.getCustomData(DungeonTower.plugin, DungeonTower.DUNGEON_LOOT_ITEM, PersistentDataType.INTEGER) != null) {
+                if (sItem.getCustomData(DungeonTower.plugin, DungeonTower.DUNGEON_LOOT_REMOVE_ON_DEATH, PersistentDataType.INTEGER) != null) {
                     itemStack.amount = 0
                 } else {
-                    itemStack.editMeta { meta -> meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin,"dlootitem")) }
+                    itemStack.editMeta { meta ->
+                        meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin, DungeonTower.DUNGEON_LOOT_ITEM))
+                    }
                 }
             }
 
         }
-        p.inventory.forEach {
-            clearDungeonItem(it)
-        }
         val cursorItem = p.itemOnCursor
         clearDungeonItem(cursorItem)
-        clearDungeonItem(p.inventory.itemInOffHand)
-        p.openInventory.topInventory.forEach {
+        p.inventory.forEach {
             clearDungeonItem(it)
         }
     }
@@ -101,24 +99,20 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
             if (itemStack == null) return
             if (itemStack.type.isAir || !itemStack.hasItemMeta()) return
             val sItem = SItem(itemStack)
-            if (sItem.getCustomData(DungeonTower.plugin, "dlootremovefloor", PersistentDataType.INTEGER) != null) {
-                val data = sItem.getCustomData(DungeonTower.plugin, "dlootremovefloor", PersistentDataType.INTEGER)?:return
+            if (sItem.getCustomData(DungeonTower.plugin, DungeonTower.DUNGEON_LOOT_REMOVE_FLOOR_COUNT, PersistentDataType.INTEGER) != null) {
+                val data = sItem.getCustomData(DungeonTower.plugin, DungeonTower.DUNGEON_LOOT_REMOVE_FLOOR_COUNT, PersistentDataType.INTEGER)?:return
                 if (data - 1 <= 0) {
                     itemStack.amount = 0
                 } else {
                     itemStack.editMeta { meta -> meta.persistentDataContainer.set(
-                        NamespacedKey(DungeonTower.plugin,"dlootremovefloor"),
+                        NamespacedKey(DungeonTower.plugin, DungeonTower.DUNGEON_LOOT_REMOVE_FLOOR_COUNT),
                         PersistentDataType.INTEGER,data - 1) }
                 }
             }
         }
-        p.inventory.forEach {
-            stepItem(it)
-        }
         val cursorItem = p.itemOnCursor
         stepItem(cursorItem)
-        stepItem(p.inventory.itemInOffHand)
-        p.openInventory.topInventory.forEach {
+        p.inventory.forEach {
             stepItem(it)
         }
     }
@@ -128,14 +122,18 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
             if (itemStack == null) return
             if (itemStack.type.isAir || !itemStack.hasItemMeta()) return
             val sItem = SItem(itemStack)
-            if (sItem.getCustomData(DungeonTower.plugin, "dlootremoveonexit", PersistentDataType.INTEGER) != null) {
+            if (sItem.getCustomData(DungeonTower.plugin, DungeonTower.DUNGEON_LOOT_REMOVE_ON_EXIT, PersistentDataType.INTEGER) != null) {
                 itemStack.amount = 0
                 return
             }
-            if (sItem.getCustomData(DungeonTower.plugin, "dlootitem", PersistentDataType.INTEGER) != null) {
-                itemStack.editMeta { meta -> meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin,"dlootitem")) }
-                if (sItem.getCustomData(DungeonTower.plugin, "dlootannounce", PersistentDataType.INTEGER) != null){
-                    itemStack.editMeta { meta -> meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin,"dlootannounce")) }
+            if (sItem.getCustomData(DungeonTower.plugin, DungeonTower.DUNGEON_LOOT_ITEM, PersistentDataType.INTEGER) != null) {
+                itemStack.editMeta { meta ->
+                    meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin, DungeonTower.DUNGEON_LOOT_ITEM))
+                }
+                if (sItem.getCustomData(DungeonTower.plugin, DungeonTower.DUNGEON_LOOT_ANNOUNCE, PersistentDataType.INTEGER) != null){
+                    itemStack.editMeta { meta ->
+                        meta.persistentDataContainer.remove(NamespacedKey(DungeonTower.plugin, DungeonTower.DUNGEON_LOOT_ANNOUNCE))
+                    }
                     val out = ByteStreams.newDataOutput()
                     out.writeUTF("Message")
                     out.writeUTF("ALL")
@@ -144,13 +142,9 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
                 }
             }
         }
-        p.inventory.forEach {
-            dungeonItemToItem(it)
-        }
         val cursorItem = p.itemOnCursor
         dungeonItemToItem(cursorItem)
-        dungeonItemToItem(p.inventory.itemInOffHand)
-        p.openInventory.topInventory.forEach {
+        p.inventory.forEach {
             dungeonItemToItem(it)
         }
     }

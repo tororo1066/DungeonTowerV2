@@ -173,11 +173,11 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
         )
 
         if (isEdit){
-            items.add(SInventoryItem(Material.WRITABLE_BOOK).setDisplayName("§a上書き保存する").setClickEvent {
+            items.add(SInventoryItem(Material.WRITABLE_BOOK).setDisplayName("§a上書き保存する").setCanClick(false).setClickEvent {
                 save(p)
                 p.closeInventory()
             })
-            items.add(SInventoryItem(Material.BARRIER).setDisplayName("§cシフト右クリックで削除する").setClickEvent {
+            items.add(SInventoryItem(Material.BARRIER).setDisplayName("§cシフト右クリックで削除する").setCanClick(false).setClickEvent {
                 if (it.click != ClickType.SHIFT_RIGHT)return@setClickEvent
 
                 File(SJavaPlugin.plugin.dataFolder.path + "/floors/${data.internalName}.yml").delete()
@@ -188,7 +188,7 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                 p.closeInventory()
             })
         } else {
-            items.add(SInventoryItem(Material.WRITABLE_BOOK).setDisplayName("§a保存する").setClickEvent {
+            items.add(SInventoryItem(Material.WRITABLE_BOOK).setDisplayName("§a保存する").setCanClick(false).setClickEvent {
                 save(p)
                 p.closeInventory()
             })

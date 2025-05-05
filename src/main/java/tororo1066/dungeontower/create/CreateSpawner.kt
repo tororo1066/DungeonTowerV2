@@ -100,7 +100,7 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
                 save(p)
                 p.closeInventory()
             })
-            items.add(SInventoryItem(Material.BARRIER).setDisplayName("§cシフト右クリックで削除する").setClickEvent {
+            items.add(SInventoryItem(Material.BARRIER).setDisplayName("§cシフト右クリックで削除する").setCanClick(false).setClickEvent {
                 if (it.click != ClickType.SHIFT_RIGHT)return@setClickEvent
                 File(SJavaPlugin.plugin.dataFolder.path + "/spawners/${data.internalName}.yml").delete()
                 DungeonTower.spawnerData.remove(data.internalName)

@@ -367,7 +367,7 @@ class DungeonCommand: SCommand(
     }
 
     @SCommandBody("dungeon.op")
-    val reload = command().addArg(SCommandArg("reload")).setPlayerExecutor {
+    val reload = command().addArg(SCommandArg("reload")).setNormalExecutor {
         DungeonTower.reloadDungeonConfig()
         it.sender.sendPrefixMsg(SStr("&aリロードしました"))
     }
@@ -511,43 +511,6 @@ class DungeonCommand: SCommand(
             val copy = DungeonTower.lootData[it.args[2]]!!.clone()
             copy.internalName = it.args[3]
             CreateLoot(copy,false).open(it.sender)
-        }
-
-    @SCommandBody("dungeon.op")
-    val createLootItem = command().addArg(SCommandArg("create")).addArg(SCommandArg("lootitem"))
-        .addArg(SCommandArg(SCommandArgType.STRING).addAlias("内部名"))
-        .setPlayerExecutor {
-            if (!it.sender.checkIllegal(it.args[2]))return@setPlayerExecutor
-            if (DungeonTower.lootItemData.containsKey(it.args[2])){
-                it.sender.sendPrefixMsg(SStr("&c既に存在してるよ！"))
-                return@setPlayerExecutor
-            }
-
-            val data = LootItemData()
-            data.internalName = it.args[2]
-            data.itemStack = SItem(Material.STONE)
-            CreateLootItem(data,false).open(it.sender)
-        }
-
-    @SCommandBody("dungeon.op")
-    val editLootItem = command().addArg(SCommandArg("edit")).addArg(SCommandArg("lootitem"))
-        .addArg(SCommandArg(DungeonTower.lootItemData.keys))
-        .setPlayerExecutor {
-            if (!it.sender.checkIllegal(it.args[2]))return@setPlayerExecutor
-            if (!DungeonTower.lootItemData.containsKey(it.args[2])){
-                it.sender.sendPrefixMsg(SStr("&c存在しないよ！"))
-                return@setPlayerExecutor
-            }
-            CreateLootItem(DungeonTower.lootItemData[it.args[2]]!!.clone(),true).open(it.sender)
-        }
-
-    @SCommandBody("dungeon.op")
-    val copyLootItem = command().addArg(SCommandArg("copy")).addArg(SCommandArg("lootitem"))
-        .addArg(SCommandArg(DungeonTower.lootItemData.keys).addAlias("コピー元")).addArg(SCommandArg(SCommandArgType.STRING).addAlias("内部名"))
-        .setPlayerExecutor {
-            val copy = DungeonTower.lootItemData[it.args[2]]!!.clone()
-            copy.internalName = it.args[3]
-            CreateLootItem(copy,false).open(it.sender)
         }
 
     @SCommandBody("dungeon.op")

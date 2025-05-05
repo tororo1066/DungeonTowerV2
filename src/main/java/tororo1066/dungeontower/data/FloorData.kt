@@ -26,10 +26,6 @@ import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.loot.LootContext
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitRunnable
-import org.bukkit.util.Vector
-import tororo1066.displaymonitor.actions.ActionContext
-import tororo1066.displaymonitor.actions.PublicActionContext
-import tororo1066.displaymonitor.storage.ActionStorage
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.save.SaveDataDB
 import tororo1066.dungeontower.script.FloorScript
@@ -96,12 +92,12 @@ class FloorData: Cloneable {
 
     fun randomSubFloor(): FloorData {
         val random = kotlin.random.Random.nextInt(1..1000000)
-        var preventRandom = 0
+        var previousRandom = 0
         for (floor in subFloors){
-            if (preventRandom < random && floor.first + preventRandom > random){
+            if (previousRandom < random && floor.first + previousRandom > random){
                 return DungeonTower.floorData[floor.second]!!.newInstance()
             }
-            preventRandom = floor.first
+            previousRandom = floor.first
         }
         throw NullPointerException("Couldn't find floor. Maybe sum percentage is not 1000000.")
     }
@@ -134,9 +130,9 @@ class FloorData: Cloneable {
             sEvent.register(EntityDeathEvent::class.java) { e ->
                 if (e.entity.persistentDataContainer[NamespacedKey(DungeonTower.plugin,"dmob"), PersistentDataType.STRING] != uuid.toString())return@register
 
-                ActionStorage.trigger(
+                DungeonTower.actionStorage.trigger(
                     "dungeon_kill_spawner_mob",
-                    ActionContext(PublicActionContext()).apply {
+                    DungeonTower.actionStorage.createActionContext(DungeonTower.actionStorage.createPublicContext()).apply {
                         this.target = e.entity
                         this.location = e.entity.location
                         this.prepareParameters.let {
@@ -352,10 +348,7 @@ class FloorData: Cloneable {
                                 chest.customName(Component.text(loot.displayName))
                                 chest.setLock("§c§l${Random().nextDouble(10000.0)}")
                                 chest.update()
-                                loot.fillInventory(
-                                    chest.inventory, Random(),
-                                    LootContext.Builder(chest.location).build()
-                                )
+                                loot.supplyLoot(chest.location)
                                 val blockData = chest.blockData as Directional
                                 blockData.facing = (data.blockData as org.bukkit.block.data.type.Sign).rotation
                                 chest.blockData = blockData
@@ -590,9 +583,6 @@ class FloorData: Cloneable {
         parallelFloors.forEach {
             it.value.activate()
         }
-//        if (clearTask.none { !it.clear }) {
-//            unlockChest()
-//        }
         return
     }
 
@@ -693,14 +683,13 @@ class FloorData: Cloneable {
         val map = HashMap<String, Any>()
         map["floor.name"] = internalName
         map["floor.rotate"] = rotate
+        map["floor.world"] = dungeonStartLoc?.world?.name ?: ""
         dungeonStartLoc?.let {
-            map["floor.startLoc.world"] = it.world.name
             map["floor.startLoc.x"] = it.blockX
             map["floor.startLoc.y"] = it.blockY
             map["floor.startLoc.z"] = it.blockZ
         }
         dungeonEndLoc?.let {
-            map["floor.endLoc.world"] = it.world.name
             map["floor.endLoc.x"] = it.blockX
             map["floor.endLoc.y"] = it.blockY
             map["floor.endLoc.z"] = it.blockZ

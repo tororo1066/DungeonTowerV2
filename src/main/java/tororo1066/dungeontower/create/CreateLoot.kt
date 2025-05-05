@@ -25,64 +25,10 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(data.
                 data.displayName = str
             },
             createInputItem(
-                SItem(Material.CLOCK).setDisplayName("§a抽選回数を設定する").addLore("§d現在の値:§c${data.rollAmount}"),
-                Int::class.java
-            ) { int, _ ->
-                data.rollAmount = int
-            },
-            SInventoryItem(Material.CHEST).setDisplayName("§a中身を設定する").setCanClick(false).setClickEvent { _ ->
-                val inv = object : LargeSInventory(data.internalName) {
-                    override fun renderMenu(p: Player): Boolean {
-                        val items = arrayListOf<SInventoryItem>()
-
-                        data.items.forEach {
-                            val lootItemData = DungeonTower.lootItemData[it.third]?:return@forEach
-                            items.add(SInventoryItem(lootItemData.itemStack)
-                                .addLore(
-                                    "§a確率: ${it.first}/1000000,§b個数: ${it.second.first}..${it.second.last}",
-                                    "§6内部名: ${lootItemData.internalName}",
-                                    "§cシフト左クリックで削除"
-                                ).setCanClick(false).setClickEvent second@ { e ->
-                                    if (e.click != ClickType.SHIFT_LEFT) return@second
-                                    data.items.remove(it)
-                                    allRenderMenu(p)
-                                })
-                        }
-
-                        items.add(
-                            createInputItem(
-                                SItem(Material.EMERALD_BLOCK).setDisplayName("§a追加")
-                                    .addLore("§a合計の確率: ${data.items.sumOf { it.first }}/1000000"),
-                                String::class.java, "§dアイテムの内部名を入力してください", invOpenCancel = true, action = { str, _ ->
-                                    val lootItemData = DungeonTower.lootItemData[str]
-                                    if (lootItemData == null) {
-                                        p.sendMessage("§cその内部名のアイテムは存在しません")
-                                        open(p)
-                                        return@createInputItem
-                                    }
-
-                                    DungeonTower.sInput.sendInputCUI(
-                                        p, Int::class.java, "§d確率を設定してください(0~1000000)",
-                                        action = { int ->
-                                            DungeonTower.sInput.sendInputCUI(
-                                                p, IntProgression::class.java, "§d個数を入力してください(<最低>..<最高>)",
-                                                action = { intRange ->
-                                                    data.items.add(Triple(int, intRange, lootItemData.internalName))
-                                                    open(p)
-                                                }
-                                            )
-                                        }
-                                    )
-                                }
-                            )
-                        )
-
-                        setResourceItems(items)
-                        return true
-                    }
-                }
-
-                moveChildInventory(inv, p)
+                SItem(Material.CHEST).setDisplayName("§d抽選のスクリプトを設定する")
+                    .addLore("§d現在の値:§c${data.displayMonitorScript}"), String::class.java
+            ) { str, _ ->
+                data.displayMonitorScript = str
             }
         )
 
@@ -94,7 +40,7 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(data.
                 }
             )
             items.add(
-                SInventoryItem(Material.BARRIER).setDisplayName("§cシフト右クリックで削除する").setClickEvent {
+                SInventoryItem(Material.BARRIER).setDisplayName("§cシフト右クリックで削除する").setCanClick(false).setClickEvent {
                     if (it.click != ClickType.SHIFT_RIGHT) return@setClickEvent
                     DungeonTower.lootData.remove(data.internalName)
                     File(DungeonTower.plugin.dataFolder, "loots/${data.internalName}.yml").delete()
@@ -118,19 +64,8 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(data.
 
     private fun save(p: Player) {
         val config = SJavaPlugin.sConfig.getConfig("loots/${data.internalName}")?: YamlConfiguration()
-        config.set("roll",data.rollAmount)
-        val items = ArrayList<String>()
-        val chances = ArrayList<Int>()
-        val amounts = ArrayList<String>()
-        data.items.forEach { triple ->
-            items.add(triple.third)
-            chances.add(triple.first)
-            amounts.add("${triple.second.first}to${triple.second.last}")
-        }
         config.set("displayName",data.displayName)
-        config.set("items",items)
-        config.set("chances",chances)
-        config.set("amounts",amounts)
+        config.set("displayMonitorScript",data.displayMonitorScript)
         SJavaPlugin.sConfig.asyncSaveConfig(config,"loots/${data.internalName}").thenAccept {
             if (it){
                 DungeonTower.lootData[data.internalName] = data

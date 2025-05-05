@@ -11,7 +11,7 @@ repositories {
     mavenLocal()
     maven {
         name = 'papermc-repo'
-        url = 'https://papermc.io/repo/repository/maven-public/'
+        url = 'https://repo.papermc.io/repository/maven-public/'
     }
     maven {
         name = 'sonatype'
@@ -49,20 +49,34 @@ repositories {
 dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT'
     compileOnly "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
-    api fileTree(dir: 'libs', include: '*.jar')
-    api 'tororo1066:tororopluginapi:471710c'
-    compileOnly 'tororo1066:base:471710c'
-    compileOnly 'tororo1066:commandapi:471710c'
+
+    // Import the TororoPluginAPI
+    api 'tororo1066:tororopluginapi:cc07e47'
+    compileOnly 'tororo1066:base:cc07e47'
+    compileOnly 'tororo1066:commandapi:cc07e47'
+
+    // Import the MythicMobs API
     compileOnly "io.lumine:Mythic-Dist:5.0.4-SNAPSHOT"
-//    compileOnly 'com.sk89q.worldedit:worldedit-bukkit:7.2.9'
+
+    // Import the FastAsyncWorldEdit API
     implementation(platform("com.intellectualsites.bom:bom-newest:1.44"))
     compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core")
     compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit") { transitive = false }
+
+    // Import the WorldGuard API
     compileOnly 'com.sk89q.worldguard:worldguard-bukkit:7.0.9'
+
+    // Import the MagicAPI
     compileOnly 'com.elmakers.mine.bukkit:MagicAPI:10.2'
+
+    // Import the EvalEx API
     compileOnly 'com.ezylang:EvalEx:3.1.2'
+
+    // Import the MongoDB API
     implementation 'org.mongodb:mongodb-driver-sync:4.11.1'
-    compileOnly 'tororo1066:displaymonitor:814e7b9'
+
+    // Import the DisplayMonitor API
+    compileOnly 'tororo1066:display-monitor-api:d91dae6'
 }
 
 import org.apache.tools.ant.filters.ReplaceTokens
