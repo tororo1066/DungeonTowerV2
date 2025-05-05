@@ -375,20 +375,20 @@ class DungeonCommand: SCommand(
     @SCommandBody("dungeon.op")
     val createHelp = command().addArg(SCommandArg("create")).setNormalExecutor {
         it.sender.sendMessage(SStr("&c================== &bDungeonTower &c=================="))
-        it.sender.sendMessage(SStr("&7/dungeon create floor <内部名> &dフロアを作成する"))
-        it.sender.sendMessage(SStr("&7/dungeon create dungeon <内部名> &dダンジョンを作成する"))
-        it.sender.sendMessage(SStr("&7/dungeon create spawner <内部名> &dボスを作成する"))
-        it.sender.sendMessage(SStr("&7/dungeon create loot <内部名> &dルートチェストを作成する"))
+        it.sender.sendMessage(SStr("&7/${it.label} create floor <内部名> &dフロアを作成する"))
+        it.sender.sendMessage(SStr("&7/${it.label} create dungeon <内部名> &dダンジョンを作成する"))
+        it.sender.sendMessage(SStr("&7/${it.label} create spawner <内部名> &dボスを作成する"))
+        it.sender.sendMessage(SStr("&7/${it.label} create loot <内部名> &dルートチェストを作成する"))
         it.sender.sendMessage(SStr("&c================== &bDungeonTower &c=================="))
     }
 
     @SCommandBody("dungeon.op")
     val editHelp = command().addArg(SCommandArg("edit")).setNormalExecutor {
         it.sender.sendMessage(SStr("&c================== &bDungeonTower &c=================="))
-        it.sender.sendMessage(SStr("&7/dungeon edit floor <内部名> &dフロアを編集する"))
-        it.sender.sendMessage(SStr("&7/dungeon edit dungeon <内部名> &dダンジョンを編集する"))
-        it.sender.sendMessage(SStr("&7/dungeon edit spawner <内部名> &dボスを編集する"))
-        it.sender.sendMessage(SStr("&7/dungeon edit loot <内部名> &dルートチェストを編集する"))
+        it.sender.sendMessage(SStr("&7/${it.label} edit floor <内部名> &dフロアを編集する"))
+        it.sender.sendMessage(SStr("&7/${it.label} edit dungeon <内部名> &dダンジョンを編集する"))
+        it.sender.sendMessage(SStr("&7/${it.label} edit spawner <内部名> &dボスを編集する"))
+        it.sender.sendMessage(SStr("&7/${it.label} edit loot <内部名> &dルートチェストを編集する"))
         it.sender.sendMessage(SStr("&c================== &bDungeonTower &c=================="))
     }
 
