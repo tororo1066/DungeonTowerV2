@@ -65,12 +65,7 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
                     data.spawnScript = null
                     return@createNullableInputItem
                 }
-                val file = File(SJavaPlugin.plugin.dataFolder, str)
-                if (!file.exists()) {
-                    p.sendPrefixMsg(SStr("&cファイルが存在しません"))
-                    return@createNullableInputItem
-                }
-                data.spawnScript = file.toRelativeString(SJavaPlugin.plugin.dataFolder)
+                data.spawnScript = str
             },
             createInputItem(SItem(Material.CLOCK).setDisplayName("§aCoolTime(tick)を設定する").addLore("§d現在の値:§c${data.coolTime}"),Int::class.java){ int, _ ->
                 data.coolTime = int
@@ -89,9 +84,6 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
             },
             createInputItem(SItem(Material.BARRIER).setDisplayName("§a稼働する半径を設定する").addLore("§d現在の値:§c${data.activateRange}"),Int::class.java){ int, _ ->
                 data.activateRange = int
-            },
-            createInputItem(SItem(Material.DIAMOND_SWORD).setDisplayName("§aクリア条件を達成するために倒す数を設定する").addLore("§d現在の値:§c${data.navigateKill}"),Int::class.java){ int, _ ->
-                data.navigateKill = int
             }
         )
 
@@ -131,7 +123,6 @@ class CreateSpawner(val data: SpawnerData, val isEdit: Boolean): LargeSInventory
         config.set("yOffSet",data.yOffSet)
         config.set("level",data.level)
         config.set("activateRange",data.activateRange)
-        config.set("navigate",data.navigateKill)
         SJavaPlugin.sConfig.asyncSaveConfig(config,"spawners/${data.internalName}").thenAccept {
             if (it){
                 DungeonTower.spawnerData[data.internalName] = data

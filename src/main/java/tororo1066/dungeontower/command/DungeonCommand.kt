@@ -1,5 +1,7 @@
 package tororo1066.dungeontower.command
 
+import com.elmakers.mine.bukkit.magic.Mage
+import com.elmakers.mine.bukkit.wand.Wand
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
@@ -8,12 +10,13 @@ import org.bukkit.command.CommandSender
 import org.bukkit.persistence.PersistentDataType
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.DungeonTower.Companion.sendPrefixMsg
-import tororo1066.dungeontower.create.*
+import tororo1066.dungeontower.create.CreateFloor
+import tororo1066.dungeontower.create.CreateLoot
+import tororo1066.dungeontower.create.CreateSpawner
+import tororo1066.dungeontower.create.CreateTower
 import tororo1066.dungeontower.data.*
-import tororo1066.dungeontower.save.SaveDataDB
-import tororo1066.dungeontower.skilltree.AbstractPerk
-import tororo1066.dungeontower.skilltree.ActionBarBaseGUI
-import tororo1066.dungeontower.skilltree.ConvenienceGUI
+import tororo1066.dungeontower.weaponSystem.CustomWeapon
+import tororo1066.dungeontower.weaponSystem.UpgradeInventory
 import tororo1066.tororopluginapi.SDebug
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.annotation.SCommandBody
@@ -25,8 +28,6 @@ import tororo1066.tororopluginapi.sItem.SItem
 import tororo1066.tororopluginapi.utils.sendMessage
 import tororo1066.tororopluginapi.utils.toPlayer
 import java.util.UUID
-import java.util.concurrent.CompletableFuture
-import kotlin.math.min
 
 @Suppress("unused")
 class DungeonCommand: SCommand(
@@ -39,8 +40,6 @@ class DungeonCommand: SCommand(
     companion object {
         val accepts = HashMap<UUID,ArrayList<UUID>>()
         val entryCooldown = ArrayList<UUID>()
-        val givingPerkPoint = ArrayList<UUID>()
-        val perkOpeningPlayers = HashMap<UUID, ActionBarBaseGUI>()
 
         fun showHelp(sender: CommandSender, label: String){
             sender.sendMessage(SStr("&c==================== &bDungeonTower &c===================="))
@@ -79,100 +78,6 @@ class DungeonCommand: SCommand(
         showHelp(it.sender,it.label)
     }
 
-    @SCommandBody("dungeon.user.perk")
-    val showPerkMenu = command().addArg(SCommandArg("showPerk"))
-        .addArg(SCommandArg(DungeonTower.towerData.keys).addAlias("ダンジョン名"))
-        .addArg(SCommandArg(listOf("2560x1440", "1920x1080")))
-        .setPlayerExecutor {
-            if (DungeonTower.playNow.contains(it.sender.uniqueId) || entryCooldown.contains(it.sender.uniqueId)){
-                it.sender.sendPrefixMsg(SStr("&cダンジョンに参加しています"))
-                return@setPlayerExecutor
-            }
-            if (perkOpeningPlayers.containsKey(it.sender.uniqueId)){
-                perkOpeningPlayers[it.sender.uniqueId]!!.stop()
-            }
-            val tower = DungeonTower.towerData[it.args[1]]!!
-            val gui = ConvenienceGUI(it.sender, tower, it.args[2])
-            gui.show()
-        }
-
-    @SCommandBody("dungeon.user.perk")
-    val hidePerkMenu = command().addArg(SCommandArg("hidePerk"))
-        .setPlayerExecutor {
-            if (perkOpeningPlayers.containsKey(it.sender.uniqueId)){
-                perkOpeningPlayers[it.sender.uniqueId]!!.stop()
-            }
-        }
-
-    @SCommandBody("dungeon.user.perk.forget")
-    val forgetPerk = command().addArg(SCommandArg("forgetPerk")).addArg(SCommandArg(DungeonTower.towerData.keys))
-        .setPlayerExecutor {
-            if (DungeonTower.playNow.contains(it.sender.uniqueId)){
-                it.sender.sendPrefixMsg(SStr("&cダンジョンに参加しています"))
-                return@setPlayerExecutor
-            }
-            if (givingPerkPoint.contains(it.sender.uniqueId)){
-                it.sender.sendPrefixMsg(SStr("&c少し待ってから実行してください"))
-                return@setPlayerExecutor
-            }
-            givingPerkPoint.add(it.sender.uniqueId)
-            val tower = DungeonTower.towerData[it.args[1]]!!
-            SaveDataDB.load(it.sender.uniqueId).thenAcceptAsync { list ->
-                val data = list.find { find -> find.towerName == it.args[1] }
-                if (data == null){
-                    it.sender.sendPrefixMsg(SStr("&cパークが存在しません"))
-                    givingPerkPoint.remove(it.sender.uniqueId)
-                    return@thenAcceptAsync
-                }
-                data.perks.flatMap { entry -> entry.value.map { map -> AbstractPerk.getPerk(entry.key, map) } }.forEach {
-                    perk -> perk.onUnlearned(it.sender)
-                }
-                val points = data.perks.flatMap { entry -> entry.value.map { map -> AbstractPerk.getPerk(entry.key, map).cost } }.sum() + data.perkPoints
-                SaveDataDB.save(it.sender.uniqueId, tower, perkPoints = points, perks = hashMapOf()).thenAcceptAsync { save ->
-                    if (save){
-                        it.sender.sendPrefixMsg(SStr("&aパークを忘れました"))
-                    } else {
-                        it.sender.sendPrefixMsg(SStr("&cエラーが発生しました"))
-                    }
-                    givingPerkPoint.remove(it.sender.uniqueId)
-                }
-            }
-        }
-
-    @SCommandBody("dungeon.op")
-    val givePerkPoint = command().addArg(SCommandArg("givePerkPoint"))
-        .addArg(SCommandArg(SCommandArgType.ONLINE_PLAYER).addAlias("プレイヤー名"))
-        .addArg(SCommandArg(DungeonTower.towerData.keys).addAlias("ダンジョン名"))
-        .addArg(SCommandArg(SCommandArgType.INT).addAlias("ポイント"))
-        .setPlayerExecutor {
-            val p = it.args[1].toPlayer()!!
-            if (givingPerkPoint.contains(p.uniqueId)){
-                p.sendPrefixMsg(SStr("&c少し待ってから実行してください"))
-                return@setPlayerExecutor
-            }
-            givingPerkPoint.add(p.uniqueId)
-            val tower = DungeonTower.towerData[it.args[2]]!!
-            var increasePoints = it.args[3].toInt()
-            SaveDataDB.load(p.uniqueId).thenAcceptAsync { list ->
-                val data = list.find { find -> find.towerName == it.args[2] }
-                val inlinePerkPoints = data?.perks?.flatMap { entry -> entry.value.map { map -> AbstractPerk.getPerk(entry.key, map).cost } }?.sum() ?: 0
-                increasePoints = min(increasePoints, tower.perkLimit - inlinePerkPoints - (data?.perkPoints ?: 0))
-                val newPoints = if (data == null) {
-                    min(tower.defaultPerkPoints + increasePoints, tower.perkLimit)
-                } else {
-                    min(data.perkPoints + increasePoints, tower.perkLimit - inlinePerkPoints)
-                }
-                val save = SaveDataDB.save(p.uniqueId, tower, perkPoints = newPoints).get()
-                if (save){
-                    p.sendPrefixMsg(SStr("${tower.name}&r&aでのパークポイントが${increasePoints}増えました"))
-                } else {
-                    p.sendPrefixMsg(SStr("&cエラーが発生しました"))
-                }
-                givingPerkPoint.remove(p.uniqueId)
-                return@thenAcceptAsync
-            }
-        }
-
     @SCommandBody
     val entryTower = command().addArg(SCommandArg("entry")).addArg(SCommandArg(DungeonTower.towerData.keys)).setPlayerExecutor {
         if (entryCooldown.contains(it.sender.uniqueId)){
@@ -183,16 +88,25 @@ class DungeonCommand: SCommand(
             it.sender.sendPrefixMsg(SStr("&cダンジョンに参加しています"))
             return@setPlayerExecutor
         }
+
+        val tower = DungeonTower.towerData[it.args[1]]!!
+
         if (!DungeonTower.partiesData.containsKey(it.sender.uniqueId)){
-            it.sender.sendPrefixMsg(SStr("&cパーティに参加していません"))
-            return@setPlayerExecutor
+            if (tower.autoCreateParty) {
+                DungeonTower.partiesData[it.sender.uniqueId] = PartyData().apply {
+                    parent = it.sender.uniqueId
+                    players[it.sender.uniqueId] = UserData(it.sender.uniqueId, it.sender.name, it.sender.address.address.hostAddress)
+                }
+            } else {
+                it.sender.sendPrefixMsg(SStr("&cパーティに参加していません"))
+                return@setPlayerExecutor
+            }
         }
         if (DungeonTower.partiesData[it.sender.uniqueId] == null){
             it.sender.sendPrefixMsg(SStr("&cパーティリーダーのみが実行できます"))
             return@setPlayerExecutor
         }
 
-        val tower = DungeonTower.towerData[it.args[1]]!!
         val partyData = DungeonTower.partiesData[it.sender.uniqueId]!!
 
         tower.entryTower(it.sender,partyData)
@@ -204,7 +118,7 @@ class DungeonCommand: SCommand(
         it.sender.sendMessage(SStr("&7/${it.label} party create &dパーティを作る"))
         it.sender.sendMessage(SStr("&7/${it.label} party join <プレイヤー名> &dパーティに参加申請を送る"))
         it.sender.sendMessage(SStr("&7/${it.label} party accept <プレイヤー名> &d参加申請を承認する"))
-        it.sender.sendMessage(SStr("&7/${it.label} party leave &dパーティから脱退する"))
+        it.sender.sendMessage(SStr("&7/${it.label} party leave &dパーティから退出する"))
         it.sender.sendMessage(SStr("&c================== &bDungeonTower &c=================="))
     }
 
@@ -332,6 +246,16 @@ class DungeonCommand: SCommand(
         }
     }
 
+    @SCommandBody
+    val upgradeInventory = command().addArg(SCommandArg("upgrade")).setPlayerExecutor {
+        if (DungeonTower.playNow.contains(it.sender.uniqueId)){
+            it.sender.sendPrefixMsg(SStr("&cダンジョンに参加しています"))
+            return@setPlayerExecutor
+        }
+
+        UpgradeInventory().open(it.sender)
+    }
+
     @SCommandBody("dungeon.op")
     val partyList = command().addArg(SCommandArg("parties")).setNormalExecutor {
         DungeonTower.partiesData.values.filterNotNull().forEach { party ->
@@ -340,14 +264,29 @@ class DungeonCommand: SCommand(
                     .commandText("/minecraft:tp ${userData.mcid}")
                     .hoverText("§aクリックでテレポート"))
             }
-            it.sender.sendMessage("§dプレイ中: ${party.nowTask != null}")
-            if (party.nowTask != null){
-                it.sender.sendMessage("§dダンジョン: §r${party.nowTask!!.tower.name}")
-                it.sender.sendMessage("§dフロア: §r${party.nowTask!!.nowFloor.internalName}§7(${party.nowTask!!.nowFloorNum}階)")
+            it.sender.sendMessage("§dプレイ中: ${party.currentTask != null}")
+            if (party.currentTask != null){
+                it.sender.sendMessage("§dダンジョン: §r${party.currentTask!!.tower.name}")
+                it.sender.sendMessage("§dフロア: §r${party.currentTask!!.nowFloor.internalName}§7(${party.currentTask!!.nowFloorNum}階)")
             }
             it.sender.sendMessage("§6====================")
         }
     }
+
+    @SCommandBody("dungeon.op")
+    val forceRemoveJoinState = command().addArg(SCommandArg("forceRemoveJoinState"))
+        .addArg(SCommandArg(SCommandArgType.ONLINE_PLAYER).addAlias("プレイヤー名")).setNormalExecutor { data ->
+            val p = data.args[1].toPlayer() ?: return@setNormalExecutor
+            accepts.entries.removeIf { it.value.contains(p.uniqueId) }
+            accepts.remove(p.uniqueId)
+            DungeonTower.partiesData.filter { it.value?.players?.containsKey(p.uniqueId) == true }.forEach {
+                it.value!!.players.remove(p.uniqueId)
+            }
+            DungeonTower.partiesData.remove(p.uniqueId)
+            entryCooldown.remove(p.uniqueId)
+            DungeonTower.playNow.remove(p.uniqueId)
+            p.sendPrefixMsg(SStr("&c全ての参加状態を削除しました"))
+        }
 
     @SCommandBody("dungeon.op")
     val setLobby = command().addArg(SCommandArg("setLobby")).setPlayerExecutor {
@@ -601,24 +540,18 @@ class DungeonCommand: SCommand(
         }
 
     @SCommandBody("dungeon.op")
-    val saveFakeData = command()
-        .addArg(SCommandArg("saveFakeData"))
-        .addArg(SCommandArg(DungeonTower.towerData.keys))
-        .addArg(SCommandArg(SCommandArgType.INT).addAlias("フロア数"))
-        .addArg(SCommandArg(SCommandArgType.STRING).addAlias("内部名"))
+    val createCustomWeapon = command()
+        .addArg(SCommandArg("createCustomWeapon"))
         .setPlayerExecutor {
-            CompletableFuture.runAsync {
-                val towerData = DungeonTower.towerData[it.args[1]]!!
-                val floorData = DungeonTower.floorData[it.args[3]]!!
-                for (i in 1..it.args[2].toInt()){
-                    try {
-                        SaveDataDB.save(it.sender.uniqueId,towerData,floorData,i).join()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-            }.thenRun {
-                it.sender.sendPrefixMsg(SStr("&a保存しました"))
+            val mage = DungeonTower.magicAPI.controller.getMage(it.sender) as? Mage ?: return@setPlayerExecutor
+            val wand = DungeonTower.magicAPI.controller.getIfWand(it.sender.inventory.itemInMainHand) as? Wand
+
+            if (wand == null) {
+                it.sender.sendPrefixMsg(SStr("&c杖を持ってください"))
+                return@setPlayerExecutor
             }
+            mage.activeWand = wand
+
+            CustomWeapon.getOrCreateWeapon(wand)
         }
 }

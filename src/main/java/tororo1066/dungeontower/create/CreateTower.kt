@@ -46,31 +46,13 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
 
                     moveChildInventory(inv,p)
                 },
-            createInputItem(SItem(Material.GLOWSTONE).setDisplayName("§aデフォルトのパークポイントを設定する")
-                .addLore("§d現在の値:${data.defaultPerkPoints}"),Int::class.java) { int, _ ->
-                data.defaultPerkPoints = int
-            },
-            createInputItem(SItem(Material.OBSIDIAN).setDisplayName("§aパークポイントの上限を設定する")
-                .addLore("§d現在の値:${data.perkLimit}"),Int::class.java) { int, _ ->
-                data.perkLimit = int
-            },
-            createInputItem(SItem(Material.REDSTONE_BLOCK).setDisplayName("§a挑戦出来るか確認するスクリプトを設定する")
+            createNullableInputItem(SItem(Material.REDSTONE_BLOCK).setDisplayName("§a挑戦出来るか確認するスクリプトを設定する")
                 .addLore("§d現在の値:${data.challengeScript}"),String::class.java) { str, _ ->
-                val file = File(DungeonTower.plugin.dataFolder,str)
-                if (!file.exists()){
-                    p.sendPrefixMsg(SStr("&cファイルが存在しません"))
-                    return@createInputItem
-                }
-                data.challengeScript = file.toRelativeString(DungeonTower.plugin.dataFolder)
+                data.challengeScript = str
             },
-            createInputItem(SItem(Material.LAPIS_BLOCK).setDisplayName("§a入場時に実行するスクリプトを設定する")
+            createNullableInputItem(SItem(Material.LAPIS_BLOCK).setDisplayName("§a入場時に実行するスクリプトを設定する")
                 .addLore("§d現在の値:${data.entryScript}"),String::class.java) { str, _ ->
-                val file = File(DungeonTower.plugin.dataFolder,str)
-                if (!file.exists()){
-                    p.sendPrefixMsg(SStr("&cファイルが存在しません"))
-                    return@createInputItem
-                }
-                data.entryScript = file.toRelativeString(DungeonTower.plugin.dataFolder)
+                data.entryScript = str
             },
             SInventoryItem(Material.COMMAND_BLOCK).setDisplayName("§a最初のフロアの設定").setCanClick(false).setClickEvent { e ->
                 val inv = object : LargeSInventory(DungeonTower.plugin, "最初のフロアの設定") {
@@ -110,19 +92,6 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
                 }
                 moveChildInventory(inv,e.whoClicked as Player)
             },
-            createNullableInputItem(SItem(Material.SPAWNER).setDisplayName("§aスポナーのレベルのスクリプトを設定する")
-                .addLore("§d現在の値:${data.levelModifierScript}"),String::class.java) { str, _ ->
-                if (str == null){
-                    data.levelModifierScript = null
-                    return@createNullableInputItem
-                }
-                val file = File(DungeonTower.plugin.dataFolder, str)
-                if (!file.exists()) {
-                    p.sendPrefixMsg(SStr("&cファイルが存在しません"))
-                    return@createNullableInputItem
-                }
-                data.levelModifierScript = file.toRelativeString(DungeonTower.plugin.dataFolder)
-            },
             createNullableInputItem(SItem(Material.REDSTONE).setDisplayName("§aフロアの表示スクリプトを設定する")
                 .addLore("§d現在の値:${data.floorDisplayScript}"),String::class.java) { str, _ ->
                 if (str == null){
@@ -140,13 +109,18 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
                 .addLore("§d現在の値:${data.playerLimit}"),Int::class.java) { int, _ ->
                 data.playerLimit = int
             },
+            SInventoryItem(Material.OAK_BOAT).setDisplayName("§eパーティが存在しない時に自動で作成する")
+                .addLore("§d現在の値:${data.autoCreateParty}").setCanClick(false).setClickEvent { e ->
+                    data.autoCreateParty = !data.autoCreateParty
+                    allRenderMenu(e.whoClicked as Player)
+                },
             SInventoryItem(Material.DARK_OAK_SIGN).setDisplayName("§bワールドのゲームルールを設定する")
                 .also {
                     if (data.worldGameRules.isNotEmpty()) {
                         it.addLore("§d現在の値:")
                     }
                     data.worldGameRules.forEach { (gameRule, value) ->
-                        it.addLore("§d$gameRule $value")
+                        it.addLore("§d${gameRule.name} $value")
                     }
                 }
                 .setCanClick(false)
@@ -273,12 +247,10 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
         val config = SJavaPlugin.sConfig.getConfig("towers/${data.internalName}")?:YamlConfiguration()
         config.set("name",data.name)
         config.set("partyLimit",data.partyLimit)
-        config.set("defaultPerkPoints",data.defaultPerkPoints)
-        config.set("perkLimit",data.perkLimit)
+        config.set("autoCreateParty",data.autoCreateParty)
         config.set("challengeItem",data.challengeItem)
         config.set("challengeScript",data.challengeScript)
         config.set("entryScript",data.entryScript)
-        config.set("levelModifierScript",data.levelModifierScript)
         config.set("floorDisplayScript",data.floorDisplayScript)
         config.set("playerLimit",data.playerLimit)
         config.set("firstFloor",data.firstFloor.map { "${it.first},${it.second.internalName}" })

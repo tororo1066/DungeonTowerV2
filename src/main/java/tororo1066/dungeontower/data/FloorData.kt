@@ -1,5 +1,6 @@
 package tororo1066.dungeontower.data
 
+import com.fastasyncworldedit.core.extent.clipboard.MemoryOptimizedClipboard
 import com.sk89q.worldedit.WorldEdit
 import com.sk89q.worldedit.bukkit.BukkitWorld
 import com.sk89q.worldedit.extent.clipboard.BlockArrayClipboard
@@ -10,8 +11,8 @@ import com.sk89q.worldedit.math.transform.AffineTransform
 import com.sk89q.worldedit.regions.CuboidRegion
 import com.sk89q.worldedit.session.ClipboardHolder
 import com.sk89q.worldedit.world.block.BlockTypes
+import com.sk89q.worldguard.protection.regions.ProtectedCuboidRegion
 import io.lumine.mythic.bukkit.BukkitAPIHelper
-import io.lumine.mythic.bukkit.BukkitAdapter
 import net.kyori.adventure.text.Component
 import org.bukkit.*
 import org.bukkit.block.BlockFace
@@ -23,16 +24,17 @@ import org.bukkit.block.data.type.EndPortalFrame
 import org.bukkit.block.data.type.Stairs
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.event.entity.EntityDeathEvent
-import org.bukkit.loot.LootContext
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitRunnable
 import tororo1066.dungeontower.DungeonTower
-import tororo1066.dungeontower.save.SaveDataDB
-import tororo1066.dungeontower.script.FloorScript
+import tororo1066.dungeontower.dmonitor.floor.CallFloor
+import tororo1066.dungeontower.dmonitor.workspace.FloorWorkspace
 import tororo1066.tororopluginapi.SDebug
+import tororo1066.tororopluginapi.SJavaPlugin
+import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.sEvent.SEvent
-import tororo1066.tororopluginapi.script.ScriptFile
 import tororo1066.tororopluginapi.utils.LocType
+import tororo1066.tororopluginapi.utils.addX
 import tororo1066.tororopluginapi.utils.setYawL
 import tororo1066.tororopluginapi.utils.toLocString
 import java.io.File
@@ -56,7 +58,11 @@ class FloorData: Cloneable {
     var initialTime = 300
     var time = 300
 
+    var autoFinishedTask = false
+
     var cancelStandOnStairs = true
+
+    var preLoadChunks = false
 
     var dungeonStartLoc: Location? = null
     var dungeonEndLoc: Location? = null
@@ -79,14 +85,11 @@ class FloorData: Cloneable {
 
     val subFloors = ArrayList<Pair<Int, String>>()
     val regionFlags = mutableMapOf<String, String>()
-    var regionUUID = UUID.randomUUID()
+    var regionUUID: UUID = UUID.randomUUID()
 
     lateinit var yml: YamlConfiguration
 
     var generated = false
-
-    var shouldUseSaveData = false
-    var loadedSaveData = false
 
     val dataBlocks = HashMap<Location, BlockState>()
 
@@ -102,26 +105,13 @@ class FloorData: Cloneable {
         throw NullPointerException("Couldn't find floor. Maybe sum percentage is not 1000000.")
     }
 
-    fun getDisplayName(towerData: TowerData, floorNum: Int): String {
-        val script = towerData.floorDisplayScript ?: return towerData.name
-        val scriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, script))
-        scriptFile.publicVariables.run {
-            put("towerName", towerData.name)
-            put("floorName", internalName)
-            put("floorNum", floorNum)
-        }
-
-        val result = scriptFile.start() as? String
-        return result ?: towerData.name
-    }
-
-    inner class SpawnerRunnable(val data: SpawnerData, val partyData: PartyData, val location: Location, val uuid: UUID, val towerData: TowerData, val floorName: String, val floorNum: Int) : BukkitRunnable() {
+    class SpawnerRunnable(val data: SpawnerData, val partyData: PartyData, val location: Location, val uuid: UUID, val towerData: TowerData, val floorName: String, val floorNum: Int) : BukkitRunnable() {
 
         private val sEvent = SEvent(DungeonTower.plugin)
-        private val facing = when((location.block.blockData as EndPortalFrame).facing){
-            BlockFace.NORTH -> 0.0
-            BlockFace.EAST -> 270.0
-            BlockFace.SOUTH -> 180.0
+        private val facing = when((location.block.blockData as EndPortalFrame).facing){ //要修正
+            BlockFace.NORTH -> -180.0
+            BlockFace.EAST -> -90.0
+            BlockFace.SOUTH -> 0.0
             BlockFace.WEST -> 90.0
             else -> 0.0
         }
@@ -130,24 +120,29 @@ class FloorData: Cloneable {
             sEvent.register(EntityDeathEvent::class.java) { e ->
                 if (e.entity.persistentDataContainer[NamespacedKey(DungeonTower.plugin,"dmob"), PersistentDataType.STRING] != uuid.toString())return@register
 
+                data.kill++
+
                 DungeonTower.actionStorage.trigger(
+                    FloorWorkspace,
                     "dungeon_kill_spawner_mob",
-                    DungeonTower.actionStorage.createActionContext(DungeonTower.actionStorage.createPublicContext()).apply {
+                    DungeonTower.actionStorage.createActionContext(
+                        DungeonTower.actionStorage.createPublicContext().apply {
+                            workspace = FloorWorkspace
+                            parameters.let {
+                                it["floor.name"] = floorName
+                                it["floor.num"] = floorNum
+                                it["spawner.name"] = data.internalName
+                                it["spawner.kill"] = data.kill
+                                it["party.uuid"] = partyData.partyUUID.toString()
+                            }
+                        }
+                    ).apply {
                         this.target = e.entity
                         this.location = e.entity.location
-                        this.prepareParameters.let {
-                            it["floor.name"] = floorName
-                            it["floor.num"] = floorNum
-                            it["spawner.name"] = data.internalName
-                            it["spawner.kill"] = data.kill
-                            it["party.uuid"] = partyData.partyUUID.toString()
-                        }
                     }
                 ) { section ->
                     section.getString("floor") == floorName
                 }
-
-                data.kill++
             }
         }
 
@@ -167,13 +162,7 @@ class FloorData: Cloneable {
                 data.yOffSet,
                 (-data.radius..data.radius).random().toDouble()
             ).setYawL(facing.toFloat())
-            val mob = data.randomMob(towerData, floorName, floorNum)?.spawn(BukkitAdapter.adapt(spawnLoc),data.getLevel(towerData, floorName, floorNum))
-            location.world.playSound(location, Sound.BLOCK_END_PORTAL_FRAME_FILL, 1f, 1f)
-            location.world.spawnParticle(Particle.FLAME, location, 15)
-            mob?.entity?.dataContainer?.set(
-                NamespacedKey(DungeonTower.plugin,"dmob"),
-                PersistentDataType.STRING,
-                uuid.toString())
+            data.spawn(spawnLoc, uuid, towerData, floorName, floorNum)
             data.count++
             if (data.count >= data.max){
                 val portal = location.block.blockData as EndPortalFrame
@@ -185,13 +174,13 @@ class FloorData: Cloneable {
         fun stop() {
             Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
                 location.world.entities.filter { it.persistentDataContainer.get(
-                    NamespacedKey(DungeonTower.plugin, "dmob"),
+                    NamespacedKey(DungeonTower.plugin, DungeonTower.DUNGEON_MOB),
                     PersistentDataType.STRING) == uuid.toString() }.forEach {
                     it.remove()
                 }
             })
             sEvent.unregisterAll()
-            cancel()
+            if (!isCancelled) cancel()
         }
     }
 
@@ -218,7 +207,7 @@ class FloorData: Cloneable {
             direction
         }
 
-        modifiedDirection = -Math.toRadians(modifiedDirection)
+        modifiedDirection = Math.toRadians(modifiedDirection)
         val originLocation = (parallelFloorOrigin?:startLoc).clone()
 
         val originX = originLocation.blockX
@@ -261,6 +250,41 @@ class FloorData: Cloneable {
         var generate: Boolean
     )
 
+    fun generateFloor(towerData: TowerData, world: World, floorNum: Int, distance: Int, partyData: PartyData): CompletableFuture<Int> {
+        return CompletableFuture.supplyAsync {
+            val location = Location(
+                world,
+                distance.toDouble(),
+                DungeonTower.y.toDouble(),
+                0.0
+            )
+            val newDistance = calculateDistance(towerData, location, 0.0, floorNum, partyData) * 2
+            location.addX(newDistance.toDouble())
+            generateFloor(towerData, partyData, floorNum, location, 0.0)
+            return@supplyAsync newDistance * 2
+        }
+    }
+
+    private fun loadChunks(): CompletableFuture<Boolean> {
+        val dungeonStartLoc = this.dungeonStartLoc ?: return CompletableFuture.completedFuture(false)
+        val dungeonEndLoc = this.dungeonEndLoc ?: return CompletableFuture.completedFuture(false)
+        val world = dungeonStartLoc.world ?: return CompletableFuture.completedFuture(false)
+
+        val startChunkX = dungeonStartLoc.blockX shr 4
+        val startChunkZ = dungeonStartLoc.blockZ shr 4
+        val endChunkX = dungeonEndLoc.blockX shr 4
+        val endChunkZ = dungeonEndLoc.blockZ shr 4
+
+        return CompletableFuture.supplyAsync {
+            for (x in startChunkX..endChunkX) {
+                for (z in startChunkZ..endChunkZ) {
+                    world.getChunkAtAsync(x, z, true).join()
+                }
+            }
+            return@supplyAsync true
+        }
+    }
+
     @Suppress("DEPRECATION")
     private fun generateFloor(towerData: TowerData, partyData: PartyData, floorNum: Int, location: Location, direction: Double) {
         SDebug.broadcastDebug(3, "GeneratingFloor $internalName (step: $generateStep) in ${location.blockX},${location.blockY},${location.blockZ} with direction $direction")
@@ -269,6 +293,10 @@ class FloorData: Cloneable {
         nextFloorStairs.clear()
         spawners.clear()
         time = initialTime
+
+        if (autoFinishedTask) {
+            finished.set(true)
+        }
 
         val (lowX, lowY, lowZ, highX, highY, highZ) = getPoints()
 
@@ -285,6 +313,13 @@ class FloorData: Cloneable {
         this.dungeonStartLoc = dungeonStartLoc
         this.dungeonEndLoc = dungeonEndLoc
 
+        if (preLoadChunks) {
+            val measure = measureTimeMillis {
+                loadChunks().join()
+            }
+            SDebug.broadcastDebug(4, "loadChunks: $measure ms")
+        }
+
         val measure = measureTimeMillis {
             val region = CuboidRegion(
                 BukkitWorld(DungeonTower.floorWorld),
@@ -297,12 +332,11 @@ class FloorData: Cloneable {
                 ForwardExtentCopy(BukkitWorld(DungeonTower.floorWorld), region, clipboard, region.minimumPoint)
             Operations.complete(forwardExtentCopy)
 
-
             WorldEdit.getInstance().newEditSession(BukkitWorld(location.world)).use {
                 val operation = ClipboardHolder(clipboard)
                     .apply {
                         transform = transform.combine(AffineTransform()
-                            .rotateY(direction))
+                            .rotateY(-direction))
                     }
                     .createPaste(it)
                     .to(buildLocation.toBlockVector3())
@@ -314,7 +348,7 @@ class FloorData: Cloneable {
 
         SDebug.broadcastDebug(4, "generateFloor: $measure ms")
 
-        val modifiedDirection = -Math.toRadians(
+        val modifiedDirection = Math.toRadians(
             if (direction < 0) direction + 360 else {
                 direction
             }
@@ -346,7 +380,9 @@ class FloorData: Cloneable {
                                 val chest = placeLoc.block.state as Chest
                                 (chest.blockData as Directional).facing = (data.blockData as org.bukkit.block.data.type.Sign).rotation
                                 chest.customName(Component.text(loot.displayName))
-                                chest.setLock("§c§l${Random().nextDouble(10000.0)}")
+                                if (!autoFinishedTask) {
+                                    chest.setLock("§c§l${Random().nextDouble(10000.0)}")
+                                }
                                 chest.update()
                                 loot.supplyLoot(chest.location)
                                 val blockData = chest.blockData as Directional
@@ -371,8 +407,8 @@ class FloorData: Cloneable {
                         }
                         "floor" -> {
                             SDebug.broadcastDebug(5, "Generating Parallel Floor in ${(placeLoc).toLocString(LocType.BLOCK_COMMA)} (${x},${y},${z})")
-                            val script = data.getLine(3).ifBlank { null }
-                            val label = script?.let { let -> FloorScript.getLabelName(let) } ?: "${x},${y},${z}"
+//                            val script = data.getLine(3).ifBlank { null }
+                            val label = "${x},${y},${z}"
                             if (parallelFloors.containsKey(label)) {
                                 val floor = parallelFloors[label]!!
                                 floor.generateFloor(towerData, partyData, floorNum, placeLoc, floor.rotate)
@@ -399,21 +435,23 @@ class FloorData: Cloneable {
                 else -> {}
             }
         }
+        val region = ProtectedCuboidRegion(
+            regionUUID.toString(),
+            BlockVector3.at(dungeonStartLoc.blockX, dungeonStartLoc.blockY, dungeonStartLoc.blockZ),
+            BlockVector3.at(dungeonEndLoc.blockX, dungeonEndLoc.blockY, dungeonEndLoc.blockZ),
+        )
 
-        DungeonTower.sWorldGuard.createRegion(
-            location.world, regionUUID.toString(),
-            dungeonStartLoc.toVector(), dungeonEndLoc.toVector()
-        ).thenAccept {
-            if (it != null) {
-                DungeonTower.sWorldGuard.setFlags(it, regionFlags)
-            }
-        }.join()
+        DungeonTower.util.runTask {
+            DungeonTower.sWorldGuard.setFlags(region, regionFlags)
+        }
+
+        DungeonTower.regionContainer.get(BukkitWorld(location.world))!!.addRegion(region)
 
         generated = true
     }
 
     @Suppress("DEPRECATION")
-    fun calculateDistance(towerData: TowerData, location: Location, direction: Double, floorNum: Int): Int {
+    fun calculateDistance(towerData: TowerData, location: Location, direction: Double, floorNum: Int, partyData: PartyData): Int {
         DungeonTower.util.threadRunTask {
             loadDataBlocks()
         }
@@ -423,7 +461,31 @@ class FloorData: Cloneable {
 
         val (dungeonStartLoc, dungeonEndLoc) = calculateLocation(location, direction)
 
-        val modifiedDirection = -Math.toRadians(
+        //debug
+//        DungeonTower.util.runTask {
+//            val center = Location(
+//                dungeonStartLoc.world,
+//                (dungeonStartLoc.blockX + dungeonEndLoc.blockX) / 2.0,
+//                (dungeonStartLoc.blockY + dungeonEndLoc.blockY) / 2.0,
+//                (dungeonStartLoc.blockZ + dungeonEndLoc.blockZ) / 2.0
+//            )
+//            dungeonStartLoc.world.spawn(center, ItemDisplay::class.java) {
+//                it.itemStack = ItemStack(Material.DIAMOND_BLOCK)
+//                it.transformation = Transformation(
+//                    Vector3f(),
+//                    Quaternionf(),
+//                    Vector3f(
+//                        dungeonEndLoc.blockX - dungeonStartLoc.blockX.toFloat(),
+//                        dungeonEndLoc.blockY - dungeonStartLoc.blockY.toFloat(),
+//                        dungeonEndLoc.blockZ - dungeonStartLoc.blockZ.toFloat()
+//                    ),
+//                    Quaternionf()
+//                )
+//            }
+//        }
+        //debug end
+
+        val modifiedDirection = Math.toRadians(
             if (direction < 0) direction + 360 else {
                 direction
             }
@@ -448,30 +510,18 @@ class FloorData: Cloneable {
 
             when (data.getLine(0)) {
                 "floor" -> {
-                    if (loadedSaveData) {
-                        val script = data.getLine(3).ifBlank { null }
-                        val label = script?.let { let -> FloorScript.getLabelName(let) } ?: "${x},${y},${z}"
-                        if (parallelFloors.containsKey(label)) {
-                            val floor = parallelFloors[label]!!
-                            floor.parentData = this
-                            floor.parallelFloor = true
-                            distance += floor.calculateDistance(towerData, placeLoc, 0.0, floorNum)
-                            SDebug.broadcastDebug(1, "Loaded Parallel Floor in ${(placeLoc).toLocString(LocType.BLOCK_COMMA)} (${x},${y},${z})")
-                            return@forEach
-                        }
-                    }
                     val floor = data.getLine(1)
                     val split = data.getLine(2).split(",")
                     val chance = split.getOrNull(0)?.toIntOrNull() ?: 1000000
                     val rotate = split.getOrNull(1)?.toDoubleOrNull() ?: 0.0
                     val script = data.getLine(3).ifBlank { null }
-                    val label = script?.let { let -> FloorScript.getLabelName(let) } ?: "${x},${y},${z}"
+                    val label = "${x},${y},${z}"
                     val signRotation = (block.blockData as org.bukkit.block.data.type.Sign).rotation
                     val signRotate = when(signRotation){
                         BlockFace.NORTH -> 0.0
-                        BlockFace.EAST -> 270.0
+                        BlockFace.EAST -> 90.0
                         BlockFace.SOUTH -> 180.0
-                        BlockFace.WEST -> 90.0
+                        BlockFace.WEST -> 270.0
                         else -> 0.0
                     }
 
@@ -491,89 +541,84 @@ class FloorData: Cloneable {
             }
         }
 
-        loadedParallelFloors.sortedByDescending { it.script?.let { let -> FloorScript.getLoadPriority(let) } }.forEach { data ->
-            val (floorName, rotate) = FloorScript.generateSubFloorScript(
-                towerData.internalName,
-                data.floorName,
-                floorNum,
-                uuid!!,
-                data.location,
-                parent,
-                data.script,
-                rotate,
-                data.rotate,
-                data.signRotate,
-                generateStep,
-                loadedParallelFloors.filter { it.generate }.map { it.label },
-                loadedParallelFloors.filter { !it.generate }.map { it.label },
-                data.generate,
-                location.world.name.split("_").last().toInt()
-            )
+        val parentData = HashMap(mapOf(
+            "floor.name" to this.internalName,
+            "rotation" to this.rotate,
+            "parent" to if (parent.isEmpty()) null else parent,
+            "generateStep" to generateStep,
+            "startLoc" to listOf(dungeonStartLoc.blockX, dungeonStartLoc.blockY, dungeonStartLoc.blockZ),
+            "endLoc" to listOf(dungeonEndLoc.blockX, dungeonEndLoc.blockY, dungeonEndLoc.blockZ),
+            "parallelFloorOrigin" to listOf(originLocation.blockX, originLocation.blockY, originLocation.blockZ),
+            "location" to listOf(location.blockX, location.blockY, location.blockZ),
+        ))
+
+        CallFloor.floors.getOrPut(uuid!!) { mutableListOf() }.add(parentData)
+
+        loadedParallelFloors.forEach { data ->
+
+            var floorName = data.floorName
+            var rotate = data.rotate
+            val script = FloorWorkspace.actionConfigurations[data.script]
+
+            if (script != null) {
+                val context = DungeonTower.actionStorage.createActionContext(
+                    DungeonTower.actionStorage.createPublicContext().apply {
+                        workspace = FloorWorkspace
+                    }
+                ).apply {
+                    this.location = data.location
+                    this.publicContext.parameters.run {
+                        put("tower.name", towerData.internalName)
+                        put("floor.name", floorName)
+                        put("floor.num", floorNum)
+                        put("location", listOf(data.location.blockX, data.location.blockY, data.location.blockZ))
+                        put("rotation.base", this@FloorData.rotate)
+                        put("rotation", data.rotate)
+                        put("rotation.sign", data.signRotate)
+                        put("generateStep", generateStep)
+                        put("willGenerateFloors", loadedParallelFloors.filter { it.generate }.map { it.label })
+                        put("noGenerateFloors", loadedParallelFloors.filter { !it.generate }.map { it.label })
+                        put("generate", data.generate)
+                        if (!parent.isEmpty()) {
+                            put("parent", parent)
+                        }
+                        put("uuid", this@FloorData.uuid.toString())
+                        put("all", CallFloor.floors[uuid]?: listOf<Map<String, Any?>>())
+                        put("worldInstanceId", location.world.name.split("_").last().toInt())
+                        put("party.uuid", partyData.partyUUID.toString())
+                    }
+                }
+
+                try {
+                    val measure = measureTimeMillis {
+                        script.run(context, false, null).join()
+                    }
+                    SDebug.broadcastDebug(4, "Script for floor $floorName in world ${location.world.name} executed in $measure ms.")
+                } catch (e: Exception) {
+                    partyData.broadCast(SStr("&c生成がうまくできませんでした 報告してね"))
+                    SJavaPlugin.plugin.getLogger().severe("Failed to run script for floor $floorName in world ${location.world.name}.")
+                    e.printStackTrace()
+                }
+                floorName = context.publicContext.parameters["call.floor.name"] as? String ?: floorName
+                rotate = (context.publicContext.parameters["call.rotation"] as? Number)?.toDouble() ?: rotate
+            }
 
             if (floorName.isBlank()) return@forEach
             val floorData = DungeonTower.floorData[floorName]?.newInstance() ?: return@forEach
+
             floorData.parallelFloor = true
             floorData.parentData = this
-            floorData.rotate = rotate + this.rotate
+//            floorData.rotate = rotate + this.rotate
+            floorData.rotate = rotate
             floorData.generateStep = generateStep + 1
             floorData.uuid = this.uuid
-            floorData.parent = HashMap(mapOf(
-                "floorName" to this.internalName,
-                "script" to data.script,
-                "rotate" to this.rotate,
-                "parent" to if (parent.isEmpty()) null else parent,
-                "generateStep" to generateStep,
-                "startLoc" to listOf(dungeonStartLoc.blockX, dungeonStartLoc.blockY, dungeonStartLoc.blockZ),
-                "endLoc" to listOf(dungeonEndLoc.blockX, dungeonEndLoc.blockY, dungeonEndLoc.blockZ),
-                "parallelFloorOrigin" to listOf(originLocation.blockX, originLocation.blockY, originLocation.blockZ),
-                "location" to listOf(location.blockX, location.blockY, location.blockZ),
-            ))
+            floorData.parent = parentData
             parallelFloors[data.label] = floorData
-            FloorScript.floors.getOrPut(uuid!!) { mutableListOf() }.add(floorData.parent)
 
-            distance += floorData.calculateDistance(towerData, data.location, floorData.rotate, floorNum)
+            distance += floorData.calculateDistance(towerData, data.location, floorData.rotate, floorNum, partyData)
         }
 
         return distance
-    }
-
-    fun generateFloor(towerData: TowerData, world: World, floorNum: Int, playerUUID: UUID, partyData: PartyData): CompletableFuture<Void> {
-        return CompletableFuture.runAsync {
-            var save = false
-            if (shouldUseSaveData) {
-                if (loadedSaveData) {
-                    save = true
-                } else {
-                    SaveDataDB.load(playerUUID).get().find { it.towerName == towerData.internalName }?.let {
-                        val floorData = it.floors[floorNum]?.find { floor ->
-                            floor["internalName"] == internalName
-                        }
-                        if (floorData != null) {
-                            if (loadData(floorData)) {
-                                SDebug.broadcastDebug(1, "Using SaveData for $internalName")
-                                save = true
-                            }
-                        }
-                    }
-                }
-            }
-            val location = Location(
-                world,
-                0.0,
-                DungeonTower.y.toDouble(),
-                0.0
-            )
-            calculateDistance(towerData, location, 0.0, floorNum)
-            generateFloor(towerData, partyData, floorNum, location, 0.0)
-            if (save) {
-                SaveDataDB.save(
-                    playerUUID,
-                    towerData,
-                    floor = this,
-                    floorNum = floorNum
-                )
-            }
-        }
     }
 
     fun activate() {
@@ -633,50 +678,34 @@ class FloorData: Cloneable {
         }
         spawners.clear()
 
-        SDebug.broadcastDebug(5, "dungeonStartLoc: ${dungeonStartLoc?.toLocString(LocType.BLOCK_COMMA)}")
-        SDebug.broadcastDebug(5, "dungeonEndLoc: ${dungeonEndLoc?.toLocString(LocType.BLOCK_COMMA)}")
+        val (dungeonStartLoc, dungeonEndLoc) = Pair(dungeonStartLoc ?: return, dungeonEndLoc ?: return)
 
-        WorldEdit.getInstance().newEditSession(BukkitWorld(world)).use {
-            val x = dungeonStartLoc!!.blockX
-            val y = dungeonStartLoc!!.blockY
-            val z = dungeonStartLoc!!.blockZ
-            val endX = dungeonEndLoc!!.blockX
-            val endY = dungeonEndLoc!!.blockY
-            val endZ = dungeonEndLoc!!.blockZ
-            it.setBlocks(CuboidRegion(BukkitWorld(world),
-                BlockVector3.at(x,y,z),
-                BlockVector3.at(endX, endY, endZ)) as Set<BlockVector3>, BlockTypes.AIR!!.defaultState
-            )
+        SDebug.broadcastDebug(5, "dungeonStartLoc: ${dungeonStartLoc.toLocString(LocType.BLOCK_COMMA)}")
+        SDebug.broadcastDebug(5, "dungeonEndLoc: ${dungeonEndLoc.toLocString(LocType.BLOCK_COMMA)}")
+
+        try {
+            WorldEdit.getInstance().newEditSession(BukkitWorld(world)).use {
+                val x = dungeonStartLoc.blockX
+                val y = dungeonStartLoc.blockY
+                val z = dungeonStartLoc.blockZ
+                val endX = dungeonEndLoc.blockX
+                val endY = dungeonEndLoc.blockY
+                val endZ = dungeonEndLoc.blockZ
+                it.setBlocks(CuboidRegion(BukkitWorld(world),
+                    BlockVector3.at(x,y,z),
+                    BlockVector3.at(endX, endY, endZ)) as Set<BlockVector3>, BlockTypes.AIR!!.defaultState
+                )
+            }
+        } catch (e: Exception) {
+            SJavaPlugin.plugin.getLogger().severe("Failed to remove floor $internalName in world ${world.name}.")
+            e.printStackTrace()
         }
+
+        DungeonTower.regionContainer.get(BukkitWorld(world))?.removeRegion(regionUUID.toString())
 
         parallelFloors.forEach {
             it.value.removeFloor(world)
         }
-    }
-
-    fun toMap(): Map<String,Any> {
-        val map = HashMap<String,Any>()
-        map["parallelFloors"] = parallelFloors.entries.associate { it.key to it.value.toMap() }
-        map["internalName"] = internalName
-        map["rotate"] = rotate
-        return map
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    fun loadData(map: Map<String,Any>): Boolean {
-        if (internalName != map["internalName"])return false
-        map["parallelFloors"]?.let {
-            (it as Map<String,Any>).forEach { (key, value) ->
-                value as Map<String,Any>
-                parallelFloors[key] = DungeonTower.floorData[value["internalName"].toString()]!!.newInstance().apply {
-                    SDebug.broadcastDebug(1, "Loading Parallel Floor $key")
-                    loadData(value)
-                }
-            }
-        }
-        rotate = map["rotate"] as Double
-        loadedSaveData = true
-        return true
     }
 
     fun generateParameters(): Map<String, Any> {
@@ -709,6 +738,8 @@ class FloorData: Cloneable {
             endLoc = Location(DungeonTower.floorWorld,end[0],end[1],end[2])
             initialTime = yml.getInt("time",300)
             time = initialTime
+            autoFinishedTask = yml.getBoolean("autoFinishedTask",false)
+            preLoadChunks = yml.getBoolean("preLoadChunks",false)
             cancelStandOnStairs = yml.getBoolean("cancelStandOnStairs",true)
             joinCommands.addAll(yml.getStringList("joinCommands"))
             yml.getString("parallelFloorOrigin")?.let {
@@ -719,7 +750,7 @@ class FloorData: Cloneable {
                 val split = it.split(",")
                 subFloors.add(Pair(split[0].toInt(),split[1]))
             }
-            shouldUseSaveData = yml.getBoolean("shouldUseSaveData",false)
+//            shouldUseSaveData = yml.getBoolean("shouldUseSaveData",false)
             val flags = yml.getConfigurationSection("regionFlags")
             if (flags != null) {
                 regionFlags.clear()

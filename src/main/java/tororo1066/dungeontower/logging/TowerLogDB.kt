@@ -77,6 +77,23 @@ class TowerLogDB {
             }
         }
 
+        fun getSubAccounts(uuid: UUID): List<UUID> {
+            return if (database.isMongo) {
+                val ips = database.asyncSelect("tower_log", SDBCondition().equal("users.uuid", uuid))
+                    .get().flatMap { it.getList<Document>("users") }
+                    .map { it.getString("ip") }.distinct()
+                database.asyncSelect("tower_log", SDBCondition().include("users.ip", ips))
+                    .get().flatMap { it.getList<Document>("users") }
+                    .map { UUID.fromString(it.getString("uuid")) }.distinct()
+            } else {
+                val ips = database.asyncSelect("party_log", SDBCondition().like("uuid", uuid.toString()))
+                    .get().flatMap { it.getString("ip").split("\r\n") }.distinct()
+                database.asyncSelect("party_log", SDBCondition().include("ip", ips))
+                    .get().flatMap { it.getString("uuid").split("\r\n") }
+                    .map { UUID.fromString(it) }.distinct()
+            }
+        }
+
         fun getCount(uuid: String, ip: String, dungeons: List<String>? = null, time: Date?, action: String = "CLEAR_DUNGEON"): Int {
 
             return if (database.isMongo){

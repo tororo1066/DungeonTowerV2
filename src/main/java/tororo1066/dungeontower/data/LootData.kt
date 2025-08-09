@@ -3,6 +3,7 @@ package tororo1066.dungeontower.data
 import org.bukkit.Location
 import org.bukkit.configuration.file.YamlConfiguration
 import tororo1066.dungeontower.DungeonTower
+import tororo1066.dungeontower.dmonitor.workspace.LootWorkspace
 import java.io.File
 
 class LootData: Cloneable {
@@ -25,15 +26,14 @@ class LootData: Cloneable {
 
     fun supplyLoot(location: Location) {
         val scriptName = displayMonitorScript ?: internalName
-        val script = DungeonTower.lootScripts[scriptName] ?: return
+        val script = LootWorkspace.lootScripts[scriptName] ?: return
         script.run(
             DungeonTower.actionStorage.createActionContext(
-                DungeonTower.actionStorage.createPublicContext()
+                DungeonTower.actionStorage.createPublicContext().apply {
+                    workspace = LootWorkspace
+                }
             ).apply {
-                prepareParameters["chest.location.world"] = location.world.name
-                prepareParameters["chest.location.x"] = location.blockX
-                prepareParameters["chest.location.y"] = location.blockY
-                prepareParameters["chest.location.z"] = location.blockZ
+                this.location = location
             },
             true,
             null

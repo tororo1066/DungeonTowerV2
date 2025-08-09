@@ -116,16 +116,16 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
 
                     moveChildInventory(settingInv,p)
                 },
-            SInventoryItem(Material.REPEATING_COMMAND_BLOCK).setDisplayName("§aセーブデータを使用する")
-                .addLore("§d現在の値: ${data.shouldUseSaveData}").setCanClick(false)
-                .setClickEvent {
-                    data.shouldUseSaveData = !data.shouldUseSaveData
-                    allRenderMenu(p)
-                },
             SInventoryItem(Material.WARPED_STAIRS).setDisplayName("§aタスクをクリアしていない時に階段に上るのを禁止する")
                 .addLore("§d現在の値: ${data.cancelStandOnStairs}").setCanClick(false)
                 .setClickEvent {
                     data.cancelStandOnStairs = !data.cancelStandOnStairs
+                    allRenderMenu(p)
+                },
+            SInventoryItem(Material.GOLD_BLOCK).setDisplayName("§cタスクを予め完了させた状態にする")
+                .addLore("§d現在の値: ${data.autoFinishedTask}").setCanClick(false)
+                .setClickEvent {
+                    data.autoFinishedTask = !data.autoFinishedTask
                     allRenderMenu(p)
                 },
             SInventoryItem(Material.LAPIS_BLOCK).setDisplayName("§eWorldGuardのフラグを設定する")
@@ -169,7 +169,13 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
                     }
 
                     moveChildInventory(inv,p)
-                }
+                },
+            SInventoryItem(Material.GLOWSTONE).setDisplayName("§a開始前にチャンクを読み込む")
+                .addLore("§d現在の値: ${data.preLoadChunks}").setCanClick(false)
+                .setClickEvent {
+                    data.preLoadChunks = !data.preLoadChunks
+                    allRenderMenu(p)
+                },
         )
 
         if (isEdit){
@@ -217,8 +223,10 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
         config.set("joinCommands",data.joinCommands)
         config.set("parallelFloorOrigin",data.parallelFloorOrigin?.toLocString(LocType.BLOCK_COMMA))
         config.set("subFloors",data.subFloors.map { "${it.first},${it.second}" })
-        config.set("shouldUseSaveData",data.shouldUseSaveData)
         config.set("cancelStandOnStairs",data.cancelStandOnStairs)
+        config.set("autoFinishedTask",data.autoFinishedTask)
+        config.set("preLoadChunks",data.preLoadChunks)
+        config.set("regionFlags",data.regionFlags)
 
         SJavaPlugin.sConfig.asyncSaveConfig(config,"floors/${data.internalName}").thenAccept {
             if (it){

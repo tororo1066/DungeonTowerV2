@@ -1,8 +1,13 @@
 package tororo1066.dungeontower.task
 
 import com.destroystokyo.paper.event.player.PlayerStopSpectatingEntityEvent
+import com.sk89q.worldedit.bukkit.BukkitWorld
+import com.sk89q.worldguard.protection.regions.GlobalProtectedRegion
 import net.kyori.adventure.text.Component
 import org.bukkit.*
+import org.bukkit.entity.Player
+import org.bukkit.event.entity.EntityDamageByEntityEvent
+import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
@@ -10,24 +15,29 @@ import org.bukkit.event.player.PlayerVelocityEvent
 import org.bukkit.scoreboard.Criteria
 import org.bukkit.scoreboard.DisplaySlot
 import tororo1066.dungeontower.DungeonTower
-import tororo1066.dungeontower.command.DungeonCommand
+import tororo1066.dungeontower.EmptyWorldGenerator
 import tororo1066.dungeontower.data.FloorData
 import tororo1066.dungeontower.data.PartyData
 import tororo1066.dungeontower.data.TowerData
+import tororo1066.dungeontower.dmonitor.workspace.FloorWorkspace
 import tororo1066.dungeontower.logging.TowerLogDB
-import tororo1066.dungeontower.skilltree.ActionType
 import tororo1066.tororopluginapi.SDebug.Companion.sendDebug
+import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.utils.DateType
 import tororo1066.tororopluginapi.utils.toJPNDateStr
 import tororo1066.tororopluginapi.utils.toPlayer
-import tororo1066.tororopluginapi.world.EmptyWorldGenerator
 import java.util.UUID
 
-class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<FloorData, Int>? = null): AbstractDungeonTask(party, tower) {
+class DungeonTowerTask(
+    party: PartyData,
+    tower: TowerData,
+    val firstFloor: Pair<FloorData?, Int?>? = null
+): AbstractDungeonTask(party, tower) {
 
     var nowFloorNum = firstFloor?.second?:1
     lateinit var nowFloor: FloorData
+    var currentDistance = 0
     private val nextFloorPlayers = HashMap<FloorData, ArrayList<UUID>>()
     private val goalPlayers = ArrayList<UUID>()
     private val moveLockPlayers = ArrayList<UUID>()
@@ -36,12 +46,11 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
     private var unlockedChest = false
     private var createFloorNow = false
 
-    private val rootParent = party.parent
-
-    private var floorDisplay = tower.name
+//    private val rootParent = party.parent
 
     lateinit var world: World
 
+    var scoreboardTitle = tower.name
     val scoreboardFormats = HashMap<UUID, ArrayList<String>>() //プレイヤーごとにスコアボードを持つ
 
     val currentPlayerFloor = HashMap<UUID, FloorData>()
@@ -50,15 +59,27 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
     val exitedFloors = HashMap<UUID, ArrayList<FloorData>>()
     val publicExitedFloors = ArrayList<FloorData>()
 
-    override fun onEnd(){
+
+    override fun onEnd() {
+        party.players.keys.forEach { uuid ->
+            moveLockPlayers.remove(uuid)
+        }
         nowFloor.removeFloor(world)
         end = true
         sEvent.unregisterAll()
-        EmptyWorldGenerator.deleteWorld(world)
+        DungeonTower.regionContainer.get(BukkitWorld(world))?.removeRegion("__global__")
+        val (unloaded, message) = EmptyWorldGenerator.deleteWorld(world, lobbyLocation)
+        if (!unloaded) {
+            SJavaPlugin.plugin.getLogger().warning("Failed to unload world ${world.name}: $message")
+            DungeonWorldUnloadTask.shouldUnloadWorlds.add(world.name)
+        }
         interrupt()
     }
 
-    private fun complete(message: SStr) {
+    @Synchronized
+    fun complete(message: SStr) {
+        if (end) return
+        end = true
         TowerLogDB.clearDungeon(party, tower.internalName)
         party.broadCast(message)
         party.players.keys.forEach {
@@ -71,24 +92,38 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
         end(delay = 0)
     }
 
-    private fun fail(message: SStr) {
+    fun fail(message: SStr, delay: Long = 0) {
         TowerLogDB.annihilationDungeon(party, tower.internalName)
         party.broadCast(message)
-        end()
+        end(delay)
+    }
+
+    private fun runTrigger(name: String, player: Player, floor: FloorData) {
+        DungeonTower.actionStorage.trigger(
+            FloorWorkspace, name, DungeonTower.actionStorage.createActionContext(
+                DungeonTower.actionStorage.createPublicContext().apply {
+                    workspace = FloorWorkspace
+                    parameters.let {
+                        it["party.uuid"] = party.partyUUID.toString()
+                        it.putAll(floor.generateParameters())
+                        it["floor.num"] = nowFloorNum
+                    }
+                }
+            ).apply {
+                target = player
+            }
+        ) { section ->
+            section.getString("floor") == floor.internalName
+        }
     }
 
     override fun run() {
-        if (party.players.size == 0) return
-        party.players.keys.forEach {
-            DungeonCommand.perkOpeningPlayers[it]?.stop()
-            DungeonCommand.perkOpeningPlayers.remove(it)
-        }
+        if (party.players.isEmpty()) return
         TowerLogDB.insertPartyData(party)
         TowerLogDB.enterDungeon(party, tower.internalName)
-        party.nowTask = this
+        party.currentTask = this
 
         party.broadCast(SStr("&c${tower.name}&aにテレポート中..."))
-
         nowFloor = firstFloor?.first?:tower.randomFloor()
 
         runTask {
@@ -99,30 +134,12 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
             }
             world.setGameRule(GameRule.DO_IMMEDIATE_RESPAWN, true) //仕様上必要
 
-            DungeonTower.sWorldGuard.getRegion(
-                world, "__global__"
-            )?.let {
-                DungeonTower.sWorldGuard.setFlags(it, tower.regionFlags)
-            }
+            val globalRegion = GlobalProtectedRegion("__global__")
+            DungeonTower.sWorldGuard.setFlags(globalRegion, tower.regionFlags)
+            val regions = DungeonTower.regionContainer.get(BukkitWorld(world))
+            regions?.addRegion(globalRegion)
         }
 
-        nowFloor.generateFloor(tower, world, nowFloorNum, rootParent, party).join()
-        floorDisplay = nowFloor.getDisplayName(tower, nowFloorNum)
-
-        party.loadPerk(tower.internalName).join()
-//        party.players.keys.forEach {
-//            clearDungeonItems(it.toPlayer()?:return@forEach)
-//        }
-        runTask {
-            nowFloor.activate()
-
-            party.smokeStan(60)
-            party.teleport(nowFloor.previousFloorStairs.random().add(0.0,1.0,0.0))
-            party.registerPerk()
-            party.invokePerk(ActionType.ENTER_DUNGEON)
-            party.invokePerk(ActionType.ENTER_FLOOR)
-        }
-        callCommand(nowFloor)
         //eventでthreadをlockするの使わないで
         sEvent.register(PlayerDeathEvent::class.java){ e ->
             if (e.isCancelled)return@register
@@ -136,7 +153,6 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
             nextFloorPlayers.entries.removeIf { it.value.contains(e.player.uniqueId) }
             clearDungeonItems(e.player)
             data.isAlive = false
-            data.invokePerk(ActionType.DIE)
             party.broadCast(SStr("&c&l${e.player.name}が死亡した..."))
             for (p in party.players) {
                 val player = p.key.toPlayer()?:return@register
@@ -161,7 +177,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                     moveLockPlayers.add(uuid)
                 }
                 TowerLogDB.annihilationDungeon(party, tower.internalName)
-                end()
+                end(delay = 1)
             }
         }
 
@@ -174,8 +190,6 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
             if (!party.players.containsKey(e.player.uniqueId))return@register
             nextFloorPlayers.entries.removeIf { it.value.contains(e.player.uniqueId) }
             clearDungeonItems(e.player)
-            val data = party.players[e.player.uniqueId]!!
-            data.invokePerk(ActionType.DIE)
             if (party.parent == e.player.uniqueId){
                 val randomParent = party.players.entries.filter { it.key != e.player.uniqueId }.randomOrNull()?.key
                 if (randomParent != null){
@@ -190,6 +204,8 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
 
             DungeonTower.playNow.remove(e.player.uniqueId)
 
+            moveLockPlayers.remove(e.player.uniqueId)
+
             e.player.teleport(DungeonTower.lobbyLocation)
 
             if (party.alivePlayers.isEmpty()){
@@ -202,6 +218,18 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
 
         sEvent.register(PlayerVelocityEvent::class.java){ e ->
             if (moveLockPlayers.contains(e.player.uniqueId)){
+                e.isCancelled = true
+            }
+        }
+
+        sEvent.register(EntityDamageEvent::class.java){ e ->
+            if (moveLockPlayers.contains(e.entity.uniqueId)){
+                e.isCancelled = true
+            }
+        }
+
+        sEvent.register(EntityDamageByEntityEvent::class.java){ e ->
+            if (moveLockPlayers.contains(e.entity.uniqueId)){
                 e.isCancelled = true
             }
         }
@@ -242,8 +270,9 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                         nowFloorNum++
                         val previousFloor = nowFloor
                         nowFloor = floor.randomSubFloor()
-                        nowFloor.generateFloor(tower, world, nowFloorNum, rootParent, party).thenAccept {
-                            floorDisplay = nowFloor.getDisplayName(tower, nowFloorNum)
+                        nowFloor.generateFloor(tower, world, nowFloorNum, currentDistance, party).thenAccept { distance ->
+                            if (isInterrupted) return@thenAccept
+                            currentDistance += distance
                             DungeonTower.util.runTask {
                                 previousFloor.killMobs(world)
                                 nowFloor.activate()
@@ -266,16 +295,6 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                     if (!floor.finished.get())return@register
                     goalPlayers.add(e.player.uniqueId)
                     if (party.alivePlayers.size / 2 < goalPlayers.size){
-//                        TowerLogDB.clearDungeon(party, tower.internalName)
-//                        party.broadCast(SStr("&a&lクリア！"))
-//                        party.players.keys.forEach {
-//                            if (!party.alivePlayers.containsKey(it)){
-//                                clearDungeonItems(it.toPlayer()?:return@forEach)
-//                                return@forEach
-//                            }
-//                            dungeonItemToItem(it.toPlayer()?:return@forEach)
-//                        }
-//                        end(delay = 0)
                         complete(SStr("&a&lクリア！"))
                     }
                 }
@@ -283,13 +302,25 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
             }
         }
 
+        currentDistance += nowFloor.generateFloor(tower, world, nowFloorNum, currentDistance, party).join()
+        scoreboardTitle = tower.name
+        runTask {
+            nowFloor.activate()
+
+            party.smokeStan(60)
+            party.teleport(nowFloor.previousFloorStairs.random().add(0.0,1.0,0.0))
+        }
+        callCommand(nowFloor)
+
 
         sleep(3000)
 
         while (!end){
 
             DungeonTower.util.runTask {
-                nowFloor.time--
+                if (!createFloorNow) {
+                    nowFloor.time--
+                }
 
                 for (uuid in party.players.keys) {
                     val player = uuid.toPlayer()?:return@runTask
@@ -301,89 +332,28 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
 
                             if (!publicEnteredFloors.contains(currentFloor)) {
                                 publicEnteredFloors.add(currentFloor)
-                                DungeonTower.actionStorage.trigger("dungeon_first_enter_public", DungeonTower.actionStorage.createActionContext(
-                                    DungeonTower.actionStorage.createPublicContext()
-                                ).apply {
-                                    this.target = player
-                                    this.prepareParameters.let {
-                                        it["party.uuid"] = party.partyUUID.toString()
-                                        it.putAll(currentFloor.generateParameters())
-                                    }
-                                }) { section ->
-                                    section.getString("floor") == currentFloor.internalName
-                                }
+                                runTrigger("dungeon_first_enter_public", player, currentFloor)
                             }
 
                             if (!enteredFloors.computeIfAbsent(uuid) { arrayListOf() }.contains(currentFloor)) {
                                 enteredFloors[uuid]!!.add(currentFloor)
-                                DungeonTower.actionStorage.trigger("dungeon_first_enter_private", DungeonTower.actionStorage.createActionContext(
-                                    DungeonTower.actionStorage.createPublicContext()
-                                ).apply {
-                                    this.target = player
-                                    this.prepareParameters.let {
-                                        it["party.uuid"] = party.partyUUID.toString()
-                                        it.putAll(currentFloor.generateParameters())
-                                    }
-                                }) { section ->
-                                    section.getString("floor") == currentFloor.internalName
-                                }
+                                runTrigger("dungeon_first_enter_private", player, currentFloor)
                             }
-
-                            DungeonTower.actionStorage.trigger("dungeon_enter", DungeonTower.actionStorage.createActionContext(
-                                DungeonTower.actionStorage.createPublicContext()
-                            ).apply {
-                                this.target = player
-                                this.prepareParameters.let {
-                                    it["party.uuid"] = party.partyUUID.toString()
-                                    it.putAll(currentFloor.generateParameters())
-                                }
-                            }) { section ->
-                                section.getString("floor") == currentFloor.internalName
-                            }
+                            runTrigger("dungeon_enter", player, currentFloor)
 
                             //exit
                             if (previousFloor != null) {
                                 if (!publicExitedFloors.contains(previousFloor)) {
                                     publicExitedFloors.add(previousFloor)
-                                    DungeonTower.actionStorage.trigger("dungeon_first_exit_public", DungeonTower.actionStorage.createActionContext(
-                                        DungeonTower.actionStorage.createPublicContext()
-                                    ).apply {
-                                        this.target = player
-                                        this.prepareParameters.let {
-                                            it["party.uuid"] = party.partyUUID.toString()
-                                            it.putAll(previousFloor.generateParameters())
-                                        }
-                                    }) { section ->
-                                        section.getString("floor") == previousFloor.internalName
-                                    }
+                                    runTrigger("dungeon_first_exit_public", player, previousFloor)
                                 }
 
                                 if (!exitedFloors.computeIfAbsent(uuid) { arrayListOf() }.contains(previousFloor)) {
                                     exitedFloors[uuid]!!.add(previousFloor)
-                                    DungeonTower.actionStorage.trigger("dungeon_first_exit_private", DungeonTower.actionStorage.createActionContext(
-                                        DungeonTower.actionStorage.createPublicContext()
-                                    ).apply {
-                                        this.target = player
-                                        this.prepareParameters.let {
-                                            it["party.uuid"] = party.partyUUID.toString()
-                                            it.putAll(previousFloor.generateParameters())
-                                        }
-                                    }) { section ->
-                                        section.getString("floor") == previousFloor.internalName
-                                    }
+                                    runTrigger("dungeon_first_exit_private", player, previousFloor)
                                 }
 
-                                DungeonTower.actionStorage.trigger("dungeon_exit", DungeonTower.actionStorage.createActionContext(
-                                    DungeonTower.actionStorage.createPublicContext()
-                                ).apply {
-                                    this.target = player
-                                    this.prepareParameters.let {
-                                        it["party.uuid"] = party.partyUUID.toString()
-                                        it.putAll(previousFloor.generateParameters())
-                                    }
-                                }) { section ->
-                                    section.getString("floor") == previousFloor.internalName
-                                }
+                                runTrigger("dungeon_exit", player, previousFloor)
                             }
                         }
                         currentPlayerFloor[uuid] = currentFloor
@@ -394,7 +364,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
 
 
                     val scoreboard = Bukkit.getScoreboardManager().newScoreboard
-                    val obj = scoreboard.registerNewObjective("DungeonTower", Criteria.DUMMY, Component.text(floorDisplay))
+                    val obj = scoreboard.registerNewObjective("DungeonTower", Criteria.DUMMY, Component.text(scoreboardTitle))
                     obj.displaySlot = DisplaySlot.SIDEBAR
 
                     var scoreInt = -1
@@ -423,7 +393,7 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                         .take(4).forEach {
                             val health = "§c♥§a${it.uuid.toPlayer()!!.health.toInt()}"
                             val builder = StringBuilder()
-                            for (i in 1..16 - it.mcid.length) {
+                            repeat(16 - it.mcid.length) {
                                 builder.append(" ")
                             }
                             obj.getScore("§7$builder${it.mcid} $health").score = scoreInt
@@ -434,25 +404,16 @@ class DungeonTowerTask(party: PartyData, tower: TowerData, val firstFloor: Pair<
                 }
             }
 
-//            if (nowFloor.clearTask.none { !it.clear }){
-//                if (!unlockedChest){
-//                    unlockedChest = true
-//                    Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
-//                        nowFloor.unlockChest()
-//                    })
-//                }
-//            }
-
             if (nowFloor.time == 0){
-                runTask {
-                    party.players.keys.forEach { uuid ->
-                        moveLockPlayers.add(uuid)
-                        uuid.toPlayer()?.gameMode = GameMode.SPECTATOR
-                    }
-                }
+//                runTask {
+//                    party.players.keys.forEach { uuid ->
+//                        moveLockPlayers.add(uuid)
+//                        uuid.toPlayer()?.gameMode = GameMode.SPECTATOR
+//                    }
+//                }
                 party.broadCast(SStr("&c&l時間切れ..."))
                 TowerLogDB.timeOutDungeon(party, tower.internalName)
-                end()
+                end(1)
             }
 
             try {

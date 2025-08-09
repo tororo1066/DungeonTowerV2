@@ -51,12 +51,12 @@ dependencies {
     compileOnly "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
 
     // Import the TororoPluginAPI
-    api 'tororo1066:tororopluginapi:cc07e47'
-    compileOnly 'tororo1066:base:cc07e47'
-    compileOnly 'tororo1066:commandapi:cc07e47'
+    api 'tororo1066:tororopluginapi:cfe3884'
+    compileOnly 'tororo1066:base:cfe3884'
+    compileOnly 'tororo1066:commandapi:cfe3884'
 
     // Import the MythicMobs API
-    compileOnly "io.lumine:Mythic-Dist:5.0.4-SNAPSHOT"
+    compileOnly "io.lumine:Mythic-Dist:5.6.1"
 
     // Import the FastAsyncWorldEdit API
     implementation(platform("com.intellectualsites.bom:bom-newest:1.44"))
@@ -76,7 +76,10 @@ dependencies {
     implementation 'org.mongodb:mongodb-driver-sync:4.11.1'
 
     // Import the DisplayMonitor API
-    compileOnly 'tororo1066:display-monitor-api:d91dae6'
+    compileOnly 'tororo1066:display-monitor-api:41abe91'
+
+    // Other dependencies
+    compileOnly fileTree(dir: 'libs', include: '*.jar')
 }
 
 import org.apache.tools.ant.filters.ReplaceTokens

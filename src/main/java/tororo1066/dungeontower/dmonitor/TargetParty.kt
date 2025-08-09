@@ -1,44 +1,41 @@
 package tororo1066.dungeontower.dmonitor
 
 import tororo1066.displaymonitorapi.actions.ActionResult
-import tororo1066.displaymonitorapi.actions.IAbstractAction
 import tororo1066.displaymonitorapi.actions.IActionContext
 import tororo1066.displaymonitorapi.configuration.Execute
 import tororo1066.displaymonitorapi.configuration.IAdvancedConfigurationSection
-import tororo1066.dungeontower.DungeonTower
 import tororo1066.tororopluginapi.utils.toPlayer
-import java.util.UUID
 
-class TargetParty: IAbstractAction {
+class TargetParty: AbstractDungeonAction() {
 
     var actions: Execute = Execute.empty()
-
-    override fun allowedAutoStop(): Boolean {
-        return true
-    }
+    var onlyParent = false
 
     override fun run(context: IActionContext): ActionResult {
-        val parameters = context.configuration?.parameters ?: return ActionResult.noParameters("Parameters not found")
-        val uuid = UUID.fromString((parameters["party.uuid"] ?: return ActionResult.noParameters("Party UUID not found")) as String)
-        val party = DungeonTower.partiesData.entries.find { it.value?.partyUUID == uuid }?.value ?: return ActionResult.noParameters("Party not found")
-        party.players.keys.forEach {
-            if (context.publicContext.stop) {
-                return ActionResult.success()
+        return context.partyAction { party ->
+            val players = if (onlyParent) {
+                listOfNotNull(party.parent.toPlayer())
+            } else {
+                party.players.keys.mapNotNull { it.toPlayer() }
             }
-            val p = it.toPlayer() ?: return@forEach
-            val cloneContext = context.cloneWithRandomUUID().apply {
-                target = p
+            players.forEach { player ->
+                if (context.publicContext.stop) {
+                    return@partyAction ActionResult.success()
+                }
+                val cloneContext = context.cloneWithRandomUUID().apply {
+                    target = player
+                }
+                actions(cloneContext)
+                if (cloneContext.stop) {
+                    return@partyAction ActionResult.success()
+                }
             }
-            actions(cloneContext)
-            if (cloneContext.stop) {
-                return ActionResult.success()
-            }
+            ActionResult.success()
         }
-
-        return ActionResult.success()
     }
 
     override fun prepare(section: IAdvancedConfigurationSection) {
         actions = section.getConfigExecute("actions", actions)
+        onlyParent = section.getBoolean("onlyParent", false)
     }
 }

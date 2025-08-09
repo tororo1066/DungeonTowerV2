@@ -5,18 +5,16 @@ import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
 import org.bukkit.scoreboard.Scoreboard
 import tororo1066.dungeontower.DungeonTower
-import tororo1066.dungeontower.skilltree.ActionType
 import tororo1066.dungeontower.task.DungeonTowerTask
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.utils.sendMessage
 import tororo1066.tororopluginapi.utils.toPlayer
 import java.util.UUID
-import java.util.concurrent.CompletableFuture
 
 class PartyData: Cloneable {
     val players = HashMap<UUID,UserData>()
     lateinit var parent: UUID
-    var nowTask: DungeonTowerTask? = null
+    var currentTask: DungeonTowerTask? = null
     val partyUUID: UUID = UUID.randomUUID()
     val alivePlayers: HashMap<UUID,UserData> get() {
         return HashMap(players.filter { it.value.isAlive })
@@ -52,24 +50,6 @@ class PartyData: Cloneable {
     fun scoreboard(scoreboard: Scoreboard){
         players.keys.forEach {
             it.toPlayer()?.scoreboard = scoreboard
-        }
-    }
-
-    fun loadPerk(towerName: String): CompletableFuture<Void> {
-        return CompletableFuture.allOf(*players.values.map { it.loadPerk(towerName) }.toTypedArray())
-    }
-
-    fun registerPerk(){
-        players.values.forEach {
-            it.perks.values.forEach second@ { perk ->
-                perk.registerPerk(it.uuid.toPlayer()?:return@forEach, it)
-            }
-        }
-    }
-
-    fun invokePerk(actionType: ActionType){
-        players.values.forEach {
-            it.invokePerk(actionType)
         }
     }
 

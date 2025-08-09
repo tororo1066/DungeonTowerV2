@@ -1,11 +1,16 @@
 package tororo1066.dungeontower.data
 
 import io.lumine.mythic.api.mobs.MythicMob
+import io.lumine.mythic.bukkit.BukkitAdapter
+import org.bukkit.Location
+import org.bukkit.NamespacedKey
 import org.bukkit.configuration.file.YamlConfiguration
+import org.bukkit.persistence.PersistentDataType
 import tororo1066.dungeontower.DungeonTower
+import tororo1066.dungeontower.dmonitor.workspace.SpawnerWorkspace
 import tororo1066.tororopluginapi.otherUtils.UsefulUtility
-import tororo1066.tororopluginapi.script.ScriptFile
 import java.io.File
+import java.util.UUID
 import kotlin.random.Random
 import kotlin.random.nextInt
 
@@ -23,58 +28,51 @@ class SpawnerData: Cloneable {
     var activateRange = 0
 
     var kill = 0
-    var navigateKill = 0
 
-    private var spawnScriptFile: ScriptFile? = null
+    fun spawn(location: Location, spawnerUUID: UUID, towerData: TowerData, floorName: String, floorNum: Int) {
+        val script = SpawnerWorkspace.spawnerScripts[spawnScript]
 
-    fun randomMob(towerData: TowerData, floorName: String, floorNum: Int): MythicMob? {
-        if (spawnScript != null) {
-            if (spawnScriptFile == null) {
-                spawnScriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, spawnScript!!))
+        if (script != null) {
+            val context = DungeonTower.actionStorage.createActionContext(
+                DungeonTower.actionStorage.createPublicContext().apply {
+                    workspace = SpawnerWorkspace
+                    parameters["yOffSet"] = yOffSet
+                    parameters["radius"] = radius
+                    parameters["level"] = level
+                    parameters["tower.name"] = towerData.internalName
+                    parameters["floor.name"] = floorName
+                    parameters["floor.num"] = floorNum
+                    parameters["spawner.uuid"] = spawnerUUID.toString()
+                }
+            ).apply {
+                this.location = location
             }
-            val scriptFile = spawnScriptFile!!
-            scriptFile.publicVariables.apply {
-                this["level"] = level
-                this["towerName"] = towerData.internalName
-                this["floorName"] = floorName
-                this["floorNum"] = floorNum
-            }
-            val mob = UsefulUtility.sTry({
-                (scriptFile.start() as String)
-            }, {
+
+            script.run(
+                context,
+                true,
                 null
-            })
-            if (mob != null) {
-                return DungeonTower.mythic.getMythicMob(mob)
-            }
+            )
+            return
         }
 
+        var mob: MythicMob? = null
         val random = Random.nextInt(1..1000000)
-        var preventRandom = 0
-        for (mob in mobs){
-            if (preventRandom < random && mob.first + preventRandom > random){
-                return mob.second
+        var previousRandom = 0
+        for (pair in mobs) {
+            if (previousRandom < random && pair.first + previousRandom > random) {
+                mob = pair.second
+                break
             }
-            preventRandom += mob.first
+            previousRandom += pair.first
         }
-
-        return null
-    }
-
-    fun getLevel(towerData: TowerData, floorName: String, floorNum: Int): Double {
-        val script = towerData.levelModifierScript?:return level
-        val scriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, script))
-        scriptFile.publicVariables["level"] = level
-        scriptFile.publicVariables["towerName"] = towerData.internalName
-        scriptFile.publicVariables["floorName"] = floorName
-        scriptFile.publicVariables["floorNum"] = floorNum
-        val level = UsefulUtility.sTry({
-            (scriptFile.start() as Number).toDouble()
-        }, {
-            level
-        })
-
-        return level
+        if (mob == null) return
+        val activeMob = mob.spawn(BukkitAdapter.adapt(location), level)
+        activeMob.entity.dataContainer.set(
+            NamespacedKey(DungeonTower.plugin, DungeonTower.DUNGEON_MOB),
+            PersistentDataType.STRING,
+            spawnerUUID.toString()
+        )
     }
 
     public override fun clone(): SpawnerData {
@@ -100,7 +98,6 @@ class SpawnerData: Cloneable {
                 radius = yml.getInt("radius")
                 level = yml.getDouble("level",1.0)
                 activateRange = yml.getInt("activateRange")
-                navigateKill = yml.getInt("navigate")
             }
 
             return Pair(data.internalName, data)

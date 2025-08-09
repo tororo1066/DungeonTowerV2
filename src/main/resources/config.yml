@@ -1,6 +1,9 @@
 y: 1
 floorWorld: world
 
+customWeaponEnabled: false
+autoCreateCustomWeapon: false
+
 database:
   type: mysql
   host: localhost

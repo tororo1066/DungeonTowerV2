@@ -7,12 +7,10 @@ import org.bukkit.NamespacedKey
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
-import org.bukkit.scoreboard.DisplaySlot
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.data.FloorData
 import tororo1066.dungeontower.data.PartyData
 import tororo1066.dungeontower.data.TowerData
-import tororo1066.dungeontower.skilltree.ActionType
 import tororo1066.tororopluginapi.sEvent.SEvent
 import tororo1066.tororopluginapi.sItem.SItem
 import tororo1066.tororopluginapi.utils.toPlayer
@@ -63,12 +61,6 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         })
 
         lock.lock()
-    }
-
-    protected fun asyncRunTask(unit: ()->Unit) {
-        Bukkit.getScheduler().runTaskAsynchronously(DungeonTower.plugin, Runnable {
-            unit.invoke()
-        })
     }
 
     protected fun clearDungeonItems(p: Player) {
@@ -164,8 +156,7 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
 
     protected fun end(delay: Long = 60) {
         val function = {
-            party.players.forEach { (uuid, data) ->
-                data.invokePerk(ActionType.END_DUNGEON)
+            party.players.forEach { (uuid, _) ->
                 val p = uuid.toPlayer()
                 p?.let {
                     clearDungeonItems(it)
@@ -181,13 +172,9 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
             }
             onEnd()
         }
-        if (delay == 0L){
+        Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
             function.invoke()
-        } else {
-            Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
-                function.invoke()
-            }, delay)
-        }
+        }, delay)
     }
 
     protected fun getInFloor(mainFloor: FloorData, p: Player): FloorData? {

@@ -1,19 +1,15 @@
 package tororo1066.dungeontower.data
 
-import net.kyori.adventure.text.Component
-import org.bukkit.Bukkit
 import org.bukkit.GameRule
-import org.bukkit.Server
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.DungeonTower.Companion.sendPrefixMsg
 import tororo1066.dungeontower.command.DungeonCommand
-import tororo1066.dungeontower.save.SaveDataDB
+import tororo1066.dungeontower.dmonitor.workspace.TowerWorkspace
 import tororo1066.dungeontower.task.DungeonTowerTask
 import tororo1066.tororopluginapi.SStr
-import tororo1066.tororopluginapi.script.ScriptFile
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import kotlin.random.Random
@@ -26,17 +22,14 @@ class TowerData: Cloneable {
     var name = ""
     //挑戦可能な最大人数
     var partyLimit = -1
+    var autoCreateParty = false
     //フロアたち keyは階層、Pairのfirstは確率
     val firstFloor = ArrayList<Pair<Int,FloorData>>()
     var challengeItem: ItemStack? = null
     var challengeScript: String? = null
-    var levelModifierScript: String? = null
     var floorDisplayScript: String? = null
 
     var entryScript: String? = null
-
-    var defaultPerkPoints = 0
-    var perkLimit = 0
 
     var playerLimit = -1
 
@@ -63,72 +56,40 @@ class TowerData: Cloneable {
     }
 
     fun entryTower(p: Player, partyData: PartyData): CompletableFuture<Void> {
-//        if (DungeonTower.joiningNow) {
-//            p.sendPrefixMsg(SStr("&4少し待ってから再度試してください"))
-//            return CompletableFuture.completedFuture(null)
-//        }
-//        DungeonTower.joiningNow = true
         DungeonCommand.entryCooldown.add(p.uniqueId)
         return CompletableFuture.runAsync {
-            val saveData = SaveDataDB.load(p.uniqueId).get().find { it.towerName == internalName }
-            canChallenge(p, partyData, saveData).thenAcceptAsync { bool ->
-                if (!bool) {
-//                    DungeonTower.joiningNow = false
-                    return@thenAcceptAsync
-                }
+            canChallenge(p, partyData).thenAcceptAsync { bool ->
+                if (!bool) return@thenAcceptAsync
                 if (entryScript != null){
-                    val scriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, "$entryScript"))
-                    scriptFile.publicVariables["name"] = p.name
-                    scriptFile.publicVariables["uuid"] = p.uniqueId.toString()
-                    scriptFile.publicVariables["ip"] = p.address.address.hostAddress
-                    saveData?.let {
-                        scriptFile.publicVariables["floors"] = it.floors.mapKeys { map -> map.key.toString() }.plus("size" to it.floors.size)
-                    } ?: run {
-                        scriptFile.publicVariables["floors"] = mapOf("size" to 0)
-                    }
+                    val script = TowerWorkspace.actionConfigurations[entryScript]
 
-                    val result = scriptFile.start()
-                    if (result !is String) {
-                        p.sendPrefixMsg(SStr("&4エラー。 運営に報告してください"))
-                        Bukkit.broadcast(Component.text(
-                            "${DungeonTower.prefix}§4§l[ERROR] §r§c${scriptFile.file.name}の戻り値がStringではありません"
-                        ), Server.BROADCAST_CHANNEL_ADMINISTRATIVE)
+                    if (script == null) {
+                        p.sendPrefixMsg(SStr("&c入場時に実行するスクリプトが見つかりません"))
                         DungeonCommand.entryCooldown.remove(p.uniqueId)
-//                        DungeonTower.joiningNow = false
                         return@thenAcceptAsync
                     }
 
-                    val split = result.split(",")
-                    val floorNum = split[0].toInt()
-                    val floorName = split.getOrNull(1)
-
-                    val floorData = if (floorName != null){
-                        DungeonTower.floorData[floorName]
-                    } else {
-                        saveData?.let {
-                            if (floorNum <= it.floors.size){
-                                DungeonTower.floorData[it.floors[floorNum]?.lastOrNull()?.get("internalName")]
-                            } else {
-                                null
-                            }
+                    val context = DungeonTower.actionStorage.createActionContext(
+                        DungeonTower.actionStorage.createPublicContext().apply {
+                            parameters["entry.name"] = p.name
+                            parameters["entry.uuid"] = p.uniqueId.toString()
+                            parameters["entry.ip"] = p.address.address.hostAddress
                         }
-                    }?.newInstance()?.apply {
-                        saveData?.let {
-                            it.floors[floorNum]?.find { find -> find["internalName"] == internalName }?.let { data ->
-                                if (shouldUseSaveData) {
-                                    loadData(data)
-                                }
-                            }
-                        }
+                    ).apply {
+                        target = p
+                        location = p.location
                     }
+                    script.run(context, true, null).join()
+
+                    val floorNum = (context.publicContext.parameters["entry.floor.num"] as? Int)
+                    val floorName = context.publicContext.parameters["entry.floor.name"] as? String
+                    val floorData = DungeonTower.floorData[floorName]?.newInstance()
                     partyData.players.keys.forEach {
                         DungeonTower.playNow.add(it)
                     }
-                    val floor = floorData?.let { it to floorNum }
                     DungeonTower.util.runTask {
-                        DungeonTowerTask(partyData, this, floor).start()
+                        DungeonTowerTask(partyData, this, floorData to floorNum).start()
                     }
-
                 } else {
                     partyData.players.keys.forEach {
                         DungeonTower.playNow.add(it)
@@ -139,19 +100,18 @@ class TowerData: Cloneable {
                 }
 
                 DungeonCommand.entryCooldown.remove(p.uniqueId)
-//                DungeonTower.joiningNow = false
             }.join()
         }
     }
 
-    fun canChallenge(p: Player, partyData: PartyData, saveData: SaveDataDB.SaveData?): CompletableFuture<Boolean> {
-        if (playerLimit != -1 && DungeonTower.partiesData.count { it.value != null && it.value!!.nowTask?.tower?.internalName == internalName } >= playerLimit){
+    fun canChallenge(p: Player, partyData: PartyData): CompletableFuture<Boolean> {
+        if (playerLimit != -1 && DungeonTower.partiesData.count { it.value != null && it.value!!.currentTask?.tower?.internalName == internalName } >= playerLimit){
             p.sendPrefixMsg(SStr("&4最大並行プレイ人数の上限に達しています"))
             DungeonCommand.entryCooldown.remove(p.uniqueId)
             return CompletableFuture.completedFuture(false)
         }
 
-        if (partyData.players.size > partyLimit){
+        if (partyLimit != -1 && partyData.players.size > partyLimit){
             p.sendPrefixMsg(SStr("&4${partyLimit}人以下でしか入れません (現在:${partyData.players.size}人)"))
             DungeonCommand.entryCooldown.remove(p.uniqueId)
             return CompletableFuture.completedFuture(false)
@@ -160,33 +120,33 @@ class TowerData: Cloneable {
         var completableFuture = CompletableFuture.completedFuture(true)
 
         if (challengeScript != null){
-            val scriptFile = ScriptFile(File(DungeonTower.plugin.dataFolder, "$challengeScript"))
-            scriptFile.publicVariables["name"] = p.name
-            scriptFile.publicVariables["uuid"] = p.uniqueId.toString()
-            scriptFile.publicVariables["ip"] = p.address.address.hostAddress
-            saveData?.let {
-                scriptFile.publicVariables["floors"] = it.floors.mapKeys { map -> map.key.toString() }.plus("size" to it.floors.size)
-            } ?: run {
-                scriptFile.publicVariables["floors"] = mapOf("size" to 0)
-            }
+            val script = TowerWorkspace.actionConfigurations[challengeScript]
+                ?: throw NullPointerException("Challenge script $challengeScript not found in TowerWorkspace.")
             completableFuture = completableFuture.thenApplyAsync {
-                val result = scriptFile.start()
-                if (result is Boolean){
-                    if (!result){
-                        p.sendPrefixMsg(SStr("§c挑戦するための条件を満たしていません！"))
-                        DungeonCommand.entryCooldown.remove(p.uniqueId)
-                        return@thenApplyAsync false
-                    } else {
-                        DungeonCommand.entryCooldown.remove(p.uniqueId)
-                        return@thenApplyAsync true
+                val context = DungeonTower.actionStorage.createActionContext(
+                    DungeonTower.actionStorage.createPublicContext().apply {
+                        parameters["entry.name"] = p.name
+                        parameters["entry.uuid"] = p.uniqueId.toString()
+                        parameters["entry.ip"] = p.address.address.hostAddress
                     }
-                } else {
-                    p.sendPrefixMsg(SStr("&4エラー。 運営に報告してください"))
-                    Bukkit.broadcast(Component.text(
-                        "${DungeonTower.prefix}§4§l[ERROR] §r§c${scriptFile.file.name}の戻り値がBooleanではありません"
-                    ), Server.BROADCAST_CHANNEL_ADMINISTRATIVE)
+                ).apply {
+                    target = p
+                    location = p.location
+                }
+                script.run(
+                    context,
+                    true,
+                    null
+                ).join()
+
+                val allowed = context.publicContext.parameters["entry.allowed"] as? Boolean ?: true
+                if (!allowed) {
+                    p.sendPrefixMsg(SStr("§c挑戦するための条件を満たしていません！"))
                     DungeonCommand.entryCooldown.remove(p.uniqueId)
                     return@thenApplyAsync false
+                } else {
+                    DungeonCommand.entryCooldown.remove(p.uniqueId)
+                    return@thenApplyAsync true
                 }
             }
 
@@ -232,6 +192,7 @@ class TowerData: Cloneable {
                 internalName = file.nameWithoutExtension
                 name = yml.getString("name","null")!!
                 partyLimit = yml.getInt("partyLimit",-1)
+                autoCreateParty = yml.getBoolean("autoCreateParty",false)
                 yml.getStringList("firstFloor").forEach {
                     val split = it.split(",")
                     val floorData = (DungeonTower.floorData[split[1]]
@@ -242,10 +203,7 @@ class TowerData: Cloneable {
                 challengeItem = yml.getItemStack("challengeItem")
                 challengeScript = yml.getString("challengeScript")
                 entryScript = yml.getString("entryScript")
-                levelModifierScript = yml.getString("levelModifierScript")
                 floorDisplayScript = yml.getString("floorDisplayScript")
-                defaultPerkPoints = yml.getInt("defaultPerkPoints",0)
-                perkLimit = yml.getInt("perkLimit",0)
                 playerLimit = yml.getInt("playerLimit",-1)
                 val section = yml.getConfigurationSection("worldGameRules")
                 if (section != null) {
