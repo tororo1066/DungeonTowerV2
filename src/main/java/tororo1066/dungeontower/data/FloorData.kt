@@ -147,6 +147,7 @@ class FloorData: Cloneable {
         }
 
         private var coolTime = data.coolTime
+        private var activated = false
         override fun run() {
             if (data.count >= data.max){
                 cancel()
@@ -171,6 +172,11 @@ class FloorData: Cloneable {
             }
         }
 
+        fun activate() {
+            runTaskTimer(DungeonTower.plugin, 1L, 1L)
+            activated = true
+        }
+
         fun stop() {
             Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
                 location.world.entities.filter { it.persistentDataContainer.get(
@@ -180,7 +186,9 @@ class FloorData: Cloneable {
                 }
             })
             sEvent.unregisterAll()
-            if (!isCancelled) cancel()
+            if (activated) {
+                cancel()
+            }
         }
     }
 
@@ -250,18 +258,16 @@ class FloorData: Cloneable {
         var generate: Boolean
     )
 
-    fun generateFloor(towerData: TowerData, world: World, floorNum: Int, distance: Int, partyData: PartyData): CompletableFuture<Int> {
-        return CompletableFuture.supplyAsync {
+    fun generateFloor(towerData: TowerData, world: World, floorNum: Int, partyData: PartyData): CompletableFuture<Void> {
+        return CompletableFuture.runAsync {
             val location = Location(
                 world,
-                distance.toDouble(),
+                0.0,
                 DungeonTower.y.toDouble(),
                 0.0
             )
-            val newDistance = calculateDistance(towerData, location, 0.0, floorNum, partyData) * 2
-            location.addX(newDistance.toDouble())
+            calculateDistance(towerData, location, 0.0, floorNum, partyData)
             generateFloor(towerData, partyData, floorNum, location, 0.0)
-            return@supplyAsync newDistance * 2
         }
     }
 
@@ -320,33 +326,41 @@ class FloorData: Cloneable {
             SDebug.broadcastDebug(4, "loadChunks: $measure ms")
         }
 
-        val measure = measureTimeMillis {
-            val region = CuboidRegion(
-                BukkitWorld(DungeonTower.floorWorld),
-                BlockVector3.at(lowX, lowY, lowZ),
-                BlockVector3.at(highX, highY, highZ)
-            )
-            val clipboard = BlockArrayClipboard(region)
-            clipboard.origin = originLocation.toBlockVector3()
-            val forwardExtentCopy =
-                ForwardExtentCopy(BukkitWorld(DungeonTower.floorWorld), region, clipboard, region.minimumPoint)
-            Operations.complete(forwardExtentCopy)
+        try {
+            val measure = measureTimeMillis {
+                val region = CuboidRegion(
+                    BukkitWorld(DungeonTower.floorWorld),
+                    BlockVector3.at(lowX, lowY, lowZ),
+                    BlockVector3.at(highX, highY, highZ)
+                )
+                val clipboard = BlockArrayClipboard(region)
+                clipboard.origin = originLocation.toBlockVector3()
+                val forwardExtentCopy =
+                    ForwardExtentCopy(BukkitWorld(DungeonTower.floorWorld), region, clipboard, region.minimumPoint)
+                Operations.complete(forwardExtentCopy)
 
-            WorldEdit.getInstance().newEditSession(BukkitWorld(location.world)).use {
-                val operation = ClipboardHolder(clipboard)
-                    .apply {
-                        transform = transform.combine(AffineTransform()
-                            .rotateY(-direction))
-                    }
-                    .createPaste(it)
-                    .to(buildLocation.toBlockVector3())
-                    .ignoreAirBlocks(true)
-                    .build()
-                Operations.complete(operation)
+                WorldEdit.getInstance().newEditSession(BukkitWorld(location.world)).use {
+                    val operation = ClipboardHolder(clipboard)
+                        .apply {
+                            transform = transform.combine(AffineTransform()
+                                .rotateY(-direction))
+                        }
+                        .createPaste(it)
+                        .to(buildLocation.toBlockVector3())
+                        .ignoreAirBlocks(true)
+                        .build()
+                    Operations.complete(operation)
+                    it.flushQueue()
+                }
             }
-        }
 
-        SDebug.broadcastDebug(4, "generateFloor: $measure ms")
+            SDebug.broadcastDebug(4, "generateFloor: $measure ms")
+        } catch (e: Exception) {
+            partyData.broadCast(SStr("&c生成がうまくできませんでした 報告してね 0"))
+            SJavaPlugin.plugin.getLogger().severe("Failed to generate floor $internalName in world ${location.world.name}.")
+            e.printStackTrace()
+            return
+        }
 
         val modifiedDirection = Math.toRadians(
             if (direction < 0) direction + 360 else {
@@ -460,30 +474,6 @@ class FloorData: Cloneable {
         val originLocation = (parallelFloorOrigin ?: startLoc).clone()
 
         val (dungeonStartLoc, dungeonEndLoc) = calculateLocation(location, direction)
-
-        //debug
-//        DungeonTower.util.runTask {
-//            val center = Location(
-//                dungeonStartLoc.world,
-//                (dungeonStartLoc.blockX + dungeonEndLoc.blockX) / 2.0,
-//                (dungeonStartLoc.blockY + dungeonEndLoc.blockY) / 2.0,
-//                (dungeonStartLoc.blockZ + dungeonEndLoc.blockZ) / 2.0
-//            )
-//            dungeonStartLoc.world.spawn(center, ItemDisplay::class.java) {
-//                it.itemStack = ItemStack(Material.DIAMOND_BLOCK)
-//                it.transformation = Transformation(
-//                    Vector3f(),
-//                    Quaternionf(),
-//                    Vector3f(
-//                        dungeonEndLoc.blockX - dungeonStartLoc.blockX.toFloat(),
-//                        dungeonEndLoc.blockY - dungeonStartLoc.blockY.toFloat(),
-//                        dungeonEndLoc.blockZ - dungeonStartLoc.blockZ.toFloat()
-//                    ),
-//                    Quaternionf()
-//                )
-//            }
-//        }
-        //debug end
 
         val modifiedDirection = Math.toRadians(
             if (direction < 0) direction + 360 else {
@@ -623,7 +613,7 @@ class FloorData: Cloneable {
 
     fun activate() {
         spawners.values.forEach {
-            it.runTaskTimer(DungeonTower.plugin, 1, 1)
+            it.activate()
         }
         parallelFloors.forEach {
             it.value.activate()
@@ -695,6 +685,7 @@ class FloorData: Cloneable {
                     BlockVector3.at(x,y,z),
                     BlockVector3.at(endX, endY, endZ)) as Set<BlockVector3>, BlockTypes.AIR!!.defaultState
                 )
+                it.flushQueue()
             }
         } catch (e: Exception) {
             SJavaPlugin.plugin.getLogger().severe("Failed to remove floor $internalName in world ${world.name}.")

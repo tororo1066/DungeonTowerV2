@@ -12,6 +12,8 @@ import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerVelocityEvent
+import org.bukkit.potion.PotionEffect
+import org.bukkit.potion.PotionEffectType
 import org.bukkit.scoreboard.Criteria
 import org.bukkit.scoreboard.DisplaySlot
 import tororo1066.dungeontower.DungeonTower
@@ -21,7 +23,6 @@ import tororo1066.dungeontower.data.PartyData
 import tororo1066.dungeontower.data.TowerData
 import tororo1066.dungeontower.dmonitor.workspace.FloorWorkspace
 import tororo1066.dungeontower.logging.TowerLogDB
-import tororo1066.tororopluginapi.SDebug.Companion.sendDebug
 import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.utils.DateType
@@ -37,7 +38,6 @@ class DungeonTowerTask(
 
     var nowFloorNum = firstFloor?.second?:1
     lateinit var nowFloor: FloorData
-    var currentDistance = 0
     private val nextFloorPlayers = HashMap<FloorData, ArrayList<UUID>>()
     private val goalPlayers = ArrayList<UUID>()
     private val moveLockPlayers = ArrayList<UUID>()
@@ -64,7 +64,7 @@ class DungeonTowerTask(
         party.players.keys.forEach { uuid ->
             moveLockPlayers.remove(uuid)
         }
-        nowFloor.removeFloor(world)
+//        nowFloor.removeFloor(world)
         end = true
         sEvent.unregisterAll()
         DungeonTower.regionContainer.get(BukkitWorld(world))?.removeRegion("__global__")
@@ -245,14 +245,12 @@ class DungeonTowerTask(
             when(e.to.clone().subtract(0.0,1.0,0.0).block.type){
                 Material.WARPED_STAIRS -> {
                     val floor = getInFloor(nowFloor, e.player)?:return@register
-                    e.player.sendDebug("UpFloor", floor.internalName)
                     if (!floor.finished.get()) {
                         if (floor.cancelStandOnStairs) {
                             e.isCancelled = true
                         }
                         return@register
                     }
-                    e.player.sendDebug("UpFloor", "Clear")
                     if (nextFloorPlayers.containsKey(floor)){
                         nextFloorPlayers[floor]!!.add(e.player.uniqueId)
                     } else {
@@ -264,26 +262,31 @@ class DungeonTowerTask(
                         createFloorNow = true
                         party.alivePlayers.keys.forEach {
                             moveLockPlayers.add(it)
+                            val player = it.toPlayer()?:return@forEach
+                            player.gameMode = GameMode.SPECTATOR
+                            player.addPotionEffect(PotionEffect(PotionEffectType.BLINDNESS, Int.MAX_VALUE, 0, false, false))
                         }
                         party.broadCast(SStr("&7転移中..."))
 
                         nowFloorNum++
-                        val previousFloor = nowFloor
+
+                        nowFloor.removeFloor(world)
+
                         nowFloor = floor.randomSubFloor()
-                        nowFloor.generateFloor(tower, world, nowFloorNum, currentDistance, party).thenAccept { distance ->
+                        nowFloor.generateFloor(tower, world, nowFloorNum, party).thenAccept {
                             if (isInterrupted) return@thenAccept
-                            currentDistance += distance
                             DungeonTower.util.runTask {
-                                previousFloor.killMobs(world)
                                 nowFloor.activate()
                                 party.smokeStan(60)
                                 unlockedChest = false
                                 party.teleport(nowFloor.previousFloorStairs.random().add(0.0,1.1,0.0))
                                 callCommand(nowFloor)
-                                previousFloor.removeFloor(world)
                                 party.alivePlayers.keys.forEach {
                                     moveLockPlayers.remove(it)
-                                    stepItems(it.toPlayer()?:return@forEach)
+                                    val player = it.toPlayer()?:return@forEach
+                                    player.gameMode = GameMode.SURVIVAL
+                                    player.removePotionEffect(PotionEffectType.BLINDNESS)
+                                    stepItems(player)
                                 }
                                 createFloorNow = false
                             }
@@ -302,7 +305,7 @@ class DungeonTowerTask(
             }
         }
 
-        currentDistance += nowFloor.generateFloor(tower, world, nowFloorNum, currentDistance, party).join()
+        nowFloor.generateFloor(tower, world, nowFloorNum, party).join()
         scoreboardTitle = tower.name
         runTask {
             nowFloor.activate()

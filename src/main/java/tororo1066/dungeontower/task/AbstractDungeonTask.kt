@@ -5,6 +5,7 @@ import org.bukkit.Bukkit
 import org.bukkit.GameMode
 import org.bukkit.NamespacedKey
 import org.bukkit.entity.Player
+import org.bukkit.event.inventory.InventoryType
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
 import tororo1066.dungeontower.DungeonTower
@@ -84,6 +85,12 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         p.inventory.forEach {
             clearDungeonItem(it)
         }
+        if (p.openInventory.type == InventoryType.PLAYER) {
+            val top = p.openInventory.topInventory
+            top.forEach {
+                clearDungeonItem(it)
+            }
+        }
     }
 
     protected fun stepItems(p: Player){
@@ -106,6 +113,12 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         stepItem(cursorItem)
         p.inventory.forEach {
             stepItem(it)
+        }
+        if (p.openInventory.type == InventoryType.PLAYER) {
+            val top = p.openInventory.topInventory
+            top.forEach {
+                stepItem(it)
+            }
         }
     }
 
@@ -138,6 +151,12 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         dungeonItemToItem(cursorItem)
         p.inventory.forEach {
             dungeonItemToItem(it)
+        }
+        if (p.openInventory.type == InventoryType.PLAYER) {
+            val top = p.openInventory.topInventory
+            top.forEach {
+                dungeonItemToItem(it)
+            }
         }
     }
 

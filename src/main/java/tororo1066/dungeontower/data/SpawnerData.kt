@@ -67,12 +67,14 @@ class SpawnerData: Cloneable {
             previousRandom += pair.first
         }
         if (mob == null) return
-        val activeMob = mob.spawn(BukkitAdapter.adapt(location), level)
-        activeMob.entity.dataContainer.set(
-            NamespacedKey(DungeonTower.plugin, DungeonTower.DUNGEON_MOB),
-            PersistentDataType.STRING,
-            spawnerUUID.toString()
-        )
+        DungeonTower.util.runTask {
+            val activeMob = mob.spawn(BukkitAdapter.adapt(location), level)
+            activeMob.entity.dataContainer.set(
+                NamespacedKey(DungeonTower.plugin, DungeonTower.DUNGEON_MOB),
+                PersistentDataType.STRING,
+                spawnerUUID.toString()
+            )
+        }
     }
 
     public override fun clone(): SpawnerData {

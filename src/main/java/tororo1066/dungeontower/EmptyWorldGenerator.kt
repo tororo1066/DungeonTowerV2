@@ -16,7 +16,7 @@ class EmptyWorldGenerator {
     val id = AtomicInteger(0)
 
     fun createEmptyWorld(name: String): World {
-        val worldName = "${name}_${id.getAndIncrement()}"
+        val worldName = "${DungeonTower.plugin.name}_${name}_${id.getAndIncrement()}"
         if (Bukkit.getWorld(worldName) != null) {
             throw IllegalArgumentException("World with name $worldName already exists.")
         }
@@ -25,7 +25,7 @@ class EmptyWorldGenerator {
             .keepSpawnLoaded(TriState.TRUE)
             .generateStructures(false)
             .generator(EmptyWorldGenerator)
-            .environment(World.Environment.CUSTOM)
+            .environment(World.Environment.NORMAL)
             .type(WorldType.FLAT)
 
         val world = Bukkit.createWorld(creator)
