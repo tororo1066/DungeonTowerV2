@@ -9,6 +9,7 @@ import org.bukkit.World
 import org.bukkit.WorldCreator
 import org.bukkit.WorldType
 import org.bukkit.generator.ChunkGenerator
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 
 class EmptyWorldGenerator {
@@ -16,7 +17,7 @@ class EmptyWorldGenerator {
     val id = AtomicInteger(0)
 
     fun createEmptyWorld(name: String): World {
-        val worldName = "${DungeonTower.plugin.name}_${name}_${id.getAndIncrement()}"
+        val worldName = "${DungeonTower.plugin.name.lowercase()}_${name}_${id.getAndIncrement()}"
         if (Bukkit.getWorld(worldName) != null) {
             throw IllegalArgumentException("World with name $worldName already exists.")
         }
@@ -32,15 +33,16 @@ class EmptyWorldGenerator {
             ?: throw IllegalStateException("Failed to create world with name $worldName.")
 
         world.isAutoSave = false
-        world.keepSpawnInMemory = true
+
+        DungeonTower.worlds.add(world.uid)
 
         return world
     }
 
     companion object {
-        fun deleteWorld(world: World, spawnLocation: Location? = null): Result {
+        fun deleteWorld(world: World, spawnLocation: Location? = null): CompletableFuture<Result> {
             if (Bukkit.getWorld(world.name) == null) {
-                return Result(false, "World ${world.name} does not exist.")
+                return CompletableFuture.completedFuture(Result(false, "World ${world.name} does not exist."))
             }
 
             world.players.forEach { player ->
@@ -70,18 +72,43 @@ class EmptyWorldGenerator {
                 chunk.unload(false)
             }
 
-            if (!Bukkit.unloadWorld(world, false)) {
-                return Result(false, "Failed to unload world ${world.name}.")
-            }
+//            if (!Bukkit.unloadWorld(world, false)) {
+//                return Result(false, "Failed to unload world ${world.name}.")
+//            }
+//
+//            Bukkit.getScheduler().runTaskLaterAsynchronously(DungeonTower.plugin, Runnable {
+//                val worldFile = world.worldFolder
+//                if (worldFile.exists()) {
+//                    worldFile.deleteRecursively()
+//                }
+//            }, 100L)
+//
+//            return Result(true, "World ${world.name} has been deleted successfully.")
 
-            Bukkit.getScheduler().runTaskLaterAsynchronously(DungeonTower.plugin, Runnable {
+            return CompletableFuture.supplyAsync {
+                Thread.sleep(10000L) // Wait for the unload to complete
+                var lock = true
+                var success = false
+                Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
+                    success = Bukkit.unloadWorld(world, false)
+                    lock = false
+                })
+
+                while (lock) {
+                    Thread.sleep(100L)
+                }
+
+                if (!success) {
+                    return@supplyAsync Result(false, "Failed to unload world ${world.name}.")
+                }
+
                 val worldFile = world.worldFolder
                 if (worldFile.exists()) {
                     worldFile.deleteRecursively()
                 }
-            }, 100L)
 
-            return Result(true, "World ${world.name} has been deleted successfully.")
+                Result(true, "World ${world.name} has been deleted successfully.")
+            }
         }
     }
 

@@ -13,6 +13,8 @@ import com.sk89q.worldedit.session.ClipboardHolder
 import com.sk89q.worldedit.world.block.BlockTypes
 import com.sk89q.worldguard.protection.regions.ProtectedCuboidRegion
 import io.lumine.mythic.bukkit.BukkitAPIHelper
+import io.lumine.mythic.bukkit.MythicBukkit
+import io.lumine.mythic.core.mobs.ActiveMob
 import net.kyori.adventure.text.Component
 import org.bukkit.*
 import org.bukkit.block.BlockFace
@@ -23,6 +25,7 @@ import org.bukkit.block.data.Directional
 import org.bukkit.block.data.type.EndPortalFrame
 import org.bukkit.block.data.type.Stairs
 import org.bukkit.configuration.file.YamlConfiguration
+import org.bukkit.entity.Player
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.persistence.PersistentDataType
 import org.bukkit.scheduler.BukkitRunnable
@@ -34,7 +37,6 @@ import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.sEvent.SEvent
 import tororo1066.tororopluginapi.utils.LocType
-import tororo1066.tororopluginapi.utils.addX
 import tororo1066.tororopluginapi.utils.setYawL
 import tororo1066.tororopluginapi.utils.toLocString
 import java.io.File
@@ -62,8 +64,6 @@ class FloorData: Cloneable {
 
     var cancelStandOnStairs = true
 
-    var preLoadChunks = false
-
     var dungeonStartLoc: Location? = null
     var dungeonEndLoc: Location? = null
 
@@ -84,6 +84,7 @@ class FloorData: Cloneable {
     lateinit var parentData: FloorData
 
     val subFloors = ArrayList<Pair<Int, String>>()
+    var subFloorScript: String? = null
     val regionFlags = mutableMapOf<String, String>()
     var regionUUID: UUID = UUID.randomUUID()
 
@@ -93,7 +94,24 @@ class FloorData: Cloneable {
 
     val dataBlocks = HashMap<Location, BlockState>()
 
-    fun randomSubFloor(): FloorData {
+    fun randomSubFloor(floorNum: Int): FloorData {
+        val script = FloorWorkspace.actionConfigurations[subFloorScript]
+        if (script != null) {
+            val context = DungeonTower.actionStorage.createActionContext(
+                DungeonTower.actionStorage.createPublicContext().apply {
+                    workspace = FloorWorkspace
+                    parameters["floor.num"] = floorNum
+                    parameters["floor.name"] = internalName
+                }
+            )
+            script.run(context, true, null).join()
+            val floorName = context.publicContext.parameters["call.floor.name"] as? String
+            val floorData = DungeonTower.floorData[floorName]?.newInstance()
+            if (floorData != null) {
+                return floorData
+            }
+        }
+
         val random = kotlin.random.Random.nextInt(1..1000000)
         var previousRandom = 0
         for (floor in subFloors){
@@ -131,9 +149,8 @@ class FloorData: Cloneable {
                             parameters.let {
                                 it["floor.name"] = floorName
                                 it["floor.num"] = floorNum
-                                it["spawner.name"] = data.internalName
-                                it["spawner.kill"] = data.kill
                                 it["party.uuid"] = partyData.partyUUID.toString()
+                                it.putAll(data.spawnerParameters())
                             }
                         }
                     ).apply {
@@ -178,13 +195,24 @@ class FloorData: Cloneable {
         }
 
         fun stop() {
-            Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
-                location.world.entities.filter { it.persistentDataContainer.get(
-                    NamespacedKey(DungeonTower.plugin, DungeonTower.DUNGEON_MOB),
-                    PersistentDataType.STRING) == uuid.toString() }.forEach {
-                    it.remove()
-                }
-            })
+//            Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
+//                location.world.entities.forEach {
+//                    if (it is Player) return@forEach
+//                    val mob = DungeonTower.mythic.getMythicMobInstance(it)
+//                    if (mob != null) {
+//                        MythicBukkit.inst().skillManager.auraManager.getAuraRegistry(mob.uniqueId)?.let { registry ->
+//                            registry.auras.forEach { aura ->
+//                                registry.removeAll(aura.key)
+//                            }
+//                        }
+//                        mob.setDead()
+//                        mob.setDespawned()
+//                        mob.setUnloaded()
+//
+//                    }
+//                    it.remove()
+//                }
+//            })
             sEvent.unregisterAll()
             if (activated) {
                 cancel()
@@ -271,26 +299,6 @@ class FloorData: Cloneable {
         }
     }
 
-    private fun loadChunks(): CompletableFuture<Boolean> {
-        val dungeonStartLoc = this.dungeonStartLoc ?: return CompletableFuture.completedFuture(false)
-        val dungeonEndLoc = this.dungeonEndLoc ?: return CompletableFuture.completedFuture(false)
-        val world = dungeonStartLoc.world ?: return CompletableFuture.completedFuture(false)
-
-        val startChunkX = dungeonStartLoc.blockX shr 4
-        val startChunkZ = dungeonStartLoc.blockZ shr 4
-        val endChunkX = dungeonEndLoc.blockX shr 4
-        val endChunkZ = dungeonEndLoc.blockZ shr 4
-
-        return CompletableFuture.supplyAsync {
-            for (x in startChunkX..endChunkX) {
-                for (z in startChunkZ..endChunkZ) {
-                    world.getChunkAtAsync(x, z, true).join()
-                }
-            }
-            return@supplyAsync true
-        }
-    }
-
     @Suppress("DEPRECATION")
     private fun generateFloor(towerData: TowerData, partyData: PartyData, floorNum: Int, location: Location, direction: Double) {
         SDebug.broadcastDebug(3, "GeneratingFloor $internalName (step: $generateStep) in ${location.blockX},${location.blockY},${location.blockZ} with direction $direction")
@@ -319,13 +327,6 @@ class FloorData: Cloneable {
         this.dungeonStartLoc = dungeonStartLoc
         this.dungeonEndLoc = dungeonEndLoc
 
-        if (preLoadChunks) {
-            val measure = measureTimeMillis {
-                loadChunks().join()
-            }
-            SDebug.broadcastDebug(4, "loadChunks: $measure ms")
-        }
-
         try {
             val measure = measureTimeMillis {
                 val region = CuboidRegion(
@@ -335,9 +336,12 @@ class FloorData: Cloneable {
                 )
                 val clipboard = BlockArrayClipboard(region)
                 clipboard.origin = originLocation.toBlockVector3()
-                val forwardExtentCopy =
-                    ForwardExtentCopy(BukkitWorld(DungeonTower.floorWorld), region, clipboard, region.minimumPoint)
-                Operations.complete(forwardExtentCopy)
+
+                WorldEdit.getInstance().newEditSession(BukkitWorld(DungeonTower.floorWorld)).use {
+                    val forwardExtentCopy =
+                        ForwardExtentCopy(it, region, clipboard, region.minimumPoint)
+                    Operations.complete(forwardExtentCopy)
+                }
 
                 WorldEdit.getInstance().newEditSession(BukkitWorld(location.world)).use {
                     val operation = ClipboardHolder(clipboard)
@@ -350,7 +354,6 @@ class FloorData: Cloneable {
                         .ignoreAirBlocks(true)
                         .build()
                     Operations.complete(operation)
-                    it.flushQueue()
                 }
             }
 
@@ -421,7 +424,6 @@ class FloorData: Cloneable {
                         }
                         "floor" -> {
                             SDebug.broadcastDebug(5, "Generating Parallel Floor in ${(placeLoc).toLocString(LocType.BLOCK_COMMA)} (${x},${y},${z})")
-//                            val script = data.getLine(3).ifBlank { null }
                             val label = "${x},${y},${z}"
                             if (parallelFloors.containsKey(label)) {
                                 val floor = parallelFloors[label]!!
@@ -637,7 +639,7 @@ class FloorData: Cloneable {
                     val placeLoc = dungeonStartLoc.clone().add(indexX.toDouble() * xSign, indexY.toDouble() * ySign, indexZ.toDouble() * zSign)
 
                     val chest = placeLoc.block.state as? Chest?:continue
-                    chest.setLock(null)
+                    chest.setLockItem(null)
                     chest.update()
                 }
             }
@@ -645,24 +647,54 @@ class FloorData: Cloneable {
     }
 
     fun killMobs(world: World) {
-        val helper = BukkitAPIHelper()
-        world.entities.filter {
-            spawners.containsKey(
-                UUID.fromString(it.persistentDataContainer.get(
-                    NamespacedKey(DungeonTower.plugin, "dmob"),
-                    PersistentDataType.STRING)?:return@filter false)
-            )
-        }.forEach {
-            helper.getMythicMobInstance(it).let { mob ->
-                mob.children.forEach { child ->
-                    child.remove()
+//        fun removeMob(mob: ActiveMob) {
+//            mob.children.forEach { child ->
+//                if (child is ActiveMob) {
+//                    removeMob(child)
+//                } else {
+//                    child.remove()
+//                }
+//            }
+//            mob.setDead()
+//            mob.setDespawned()
+//            mob.setUnloaded()
+//            mob.remove()
+//        }
+//
+//        val helper = BukkitAPIHelper()
+//        world.entities.filter {
+//            spawners.containsKey(
+//                UUID.fromString(it.persistentDataContainer.get(
+//                    NamespacedKey(DungeonTower.plugin, "dmob"),
+//                    PersistentDataType.STRING)?:return@filter false)
+//            )
+//        }.forEach {
+//            helper.getMythicMobInstance(it).let { mob ->
+//                mob.children.forEach { child ->
+//                    child.remove()
+//                }
+//                mob.remove()
+//            }
+//        }
+        world.entities.forEach { entity ->
+            if (entity is Player) return@forEach
+            val mob = DungeonTower.mythic.getMythicMobInstance(entity)
+            if (mob != null) {
+                MythicBukkit.inst().skillManager.auraManager.getAuraRegistry(mob.uniqueId)?.let { registry ->
+                    registry.auras.forEach { aura ->
+                        registry.removeAll(aura.key)
+                    }
                 }
-                mob.remove()
+                mob.setDead()
+                mob.setDespawned()
+                mob.setUnloaded()
+
             }
+            entity.remove()
         }
     }
 
-    fun removeFloor(world: World){
+    fun removeFloor(world: World) {
         spawners.values.forEach {
             it.stop()
         }
@@ -685,7 +717,6 @@ class FloorData: Cloneable {
                     BlockVector3.at(x,y,z),
                     BlockVector3.at(endX, endY, endZ)) as Set<BlockVector3>, BlockTypes.AIR!!.defaultState
                 )
-                it.flushQueue()
             }
         } catch (e: Exception) {
             SJavaPlugin.plugin.getLogger().severe("Failed to remove floor $internalName in world ${world.name}.")
@@ -730,7 +761,6 @@ class FloorData: Cloneable {
             initialTime = yml.getInt("time",300)
             time = initialTime
             autoFinishedTask = yml.getBoolean("autoFinishedTask",false)
-            preLoadChunks = yml.getBoolean("preLoadChunks",false)
             cancelStandOnStairs = yml.getBoolean("cancelStandOnStairs",true)
             joinCommands.addAll(yml.getStringList("joinCommands"))
             yml.getString("parallelFloorOrigin")?.let {
@@ -741,7 +771,7 @@ class FloorData: Cloneable {
                 val split = it.split(",")
                 subFloors.add(Pair(split[0].toInt(),split[1]))
             }
-//            shouldUseSaveData = yml.getBoolean("shouldUseSaveData",false)
+            subFloorScript = yml.getString("subFloorScript")
             val flags = yml.getConfigurationSection("regionFlags")
             if (flags != null) {
                 regionFlags.clear()

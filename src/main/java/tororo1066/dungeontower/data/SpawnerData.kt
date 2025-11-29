@@ -29,6 +29,20 @@ class SpawnerData: Cloneable {
 
     var kill = 0
 
+    fun spawnerParameters(): Map<String, Any> {
+        return mapOf(
+            "spawner.name" to internalName,
+            "spawner.count" to count,
+            "spawner.coolTime" to coolTime,
+            "spawner.max" to max,
+            "spawner.radius" to radius,
+            "spawner.yOffset" to yOffSet,
+            "spawner.level" to level,
+            "spawner.activateRange" to activateRange,
+            "spawner.kill" to kill
+        )
+    }
+
     fun spawn(location: Location, spawnerUUID: UUID, towerData: TowerData, floorName: String, floorNum: Int) {
         val script = SpawnerWorkspace.spawnerScripts[spawnScript]
 
@@ -36,13 +50,11 @@ class SpawnerData: Cloneable {
             val context = DungeonTower.actionStorage.createActionContext(
                 DungeonTower.actionStorage.createPublicContext().apply {
                     workspace = SpawnerWorkspace
-                    parameters["yOffSet"] = yOffSet
-                    parameters["radius"] = radius
-                    parameters["level"] = level
                     parameters["tower.name"] = towerData.internalName
                     parameters["floor.name"] = floorName
                     parameters["floor.num"] = floorNum
                     parameters["spawner.uuid"] = spawnerUUID.toString()
+                    parameters.putAll(spawnerParameters())
                 }
             ).apply {
                 this.location = location

@@ -23,6 +23,7 @@ class LevelData {
     var levelRange: IntRange = 0..0
     var elementAttributes: List<Attribute> = emptyList()
     var weaponAttributes: List<Attribute> = emptyList()
+    var levelScale = 1.0
     var upgradeItem: String? = null
     var onUpgrade: String? = null
 
@@ -46,6 +47,8 @@ class LevelData {
             } ?: 0..0
             levelData.elementAttributes = section.getStringList("element_attributes").mapNotNull { Attribute.elementAttributes[it] }
             levelData.weaponAttributes = section.getStringList("weapon_attributes").mapNotNull { Attribute.weaponAttributes[it] }
+
+            levelData.levelScale = section.getDouble("scale", 1.0)
 
             levelData.upgradeItem = section.getString("upgrade_item")
 

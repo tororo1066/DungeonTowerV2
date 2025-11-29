@@ -20,9 +20,9 @@ class CreateLoot(val data: LootData, val isEdit: Boolean): LargeSInventory(data.
         val items = arrayListOf(
             createInputItem(
                 SItem(Material.GRASS_BLOCK).setDisplayName("§a表示名を設定する")
-                    .addLore("§d現在の値:§c${data.displayName}"), String::class.java
+                    .addLore("§d現在の値:§c${data.displayName}"), SStr::class.java
             ) { str, _ ->
-                data.displayName = str
+                data.displayName = str.toString()
             },
             createInputItem(
                 SItem(Material.CHEST).setDisplayName("§d抽選のスクリプトを設定する")

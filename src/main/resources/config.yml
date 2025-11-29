@@ -4,6 +4,8 @@ floorWorld: world
 customWeaponEnabled: false
 autoCreateCustomWeapon: false
 
+worldUsage: REUSE
+
 database:
   type: mysql
   host: localhost

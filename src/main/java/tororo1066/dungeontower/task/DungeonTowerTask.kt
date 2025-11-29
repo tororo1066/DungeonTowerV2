@@ -17,18 +17,20 @@ import org.bukkit.potion.PotionEffectType
 import org.bukkit.scoreboard.Criteria
 import org.bukkit.scoreboard.DisplaySlot
 import tororo1066.dungeontower.DungeonTower
+import tororo1066.dungeontower.DungeonWorldUnloadTask
 import tororo1066.dungeontower.EmptyWorldGenerator
+import tororo1066.dungeontower.WorldUsage
 import tororo1066.dungeontower.data.FloorData
 import tororo1066.dungeontower.data.PartyData
 import tororo1066.dungeontower.data.TowerData
 import tororo1066.dungeontower.dmonitor.workspace.FloorWorkspace
 import tororo1066.dungeontower.logging.TowerLogDB
-import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.utils.DateType
 import tororo1066.tororopluginapi.utils.toJPNDateStr
 import tororo1066.tororopluginapi.utils.toPlayer
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 
 class DungeonTowerTask(
     party: PartyData,
@@ -50,6 +52,13 @@ class DungeonTowerTask(
 
     lateinit var world: World
 
+    private fun getNullableWorld(): World? {
+        if (::world.isInitialized) {
+            return world
+        }
+        return null
+    }
+
     var scoreboardTitle = tower.name
     val scoreboardFormats = HashMap<UUID, ArrayList<String>>() //プレイヤーごとにスコアボードを持つ
 
@@ -64,15 +73,32 @@ class DungeonTowerTask(
         party.players.keys.forEach { uuid ->
             moveLockPlayers.remove(uuid)
         }
-//        nowFloor.removeFloor(world)
+        nowFloor.removeFloor(world)
         end = true
         sEvent.unregisterAll()
         DungeonTower.regionContainer.get(BukkitWorld(world))?.removeRegion("__global__")
-        val (unloaded, message) = EmptyWorldGenerator.deleteWorld(world, lobbyLocation)
-        if (!unloaded) {
-            SJavaPlugin.plugin.getLogger().warning("Failed to unload world ${world.name}: $message")
-            DungeonWorldUnloadTask.shouldUnloadWorlds.add(world.name)
+//        EmptyWorldGenerator.deleteWorld(world, lobbyLocation).thenAccept { result ->
+//            if (!result.success) {
+//                SJavaPlugin.plugin.getLogger().warning("Failed to delete world ${world.name}: ${result.message}")
+//                DungeonWorldUnloadTask.shouldUnloadWorlds.add(world.uid)
+//            }
+//        }
+        if (DungeonTower.worldUsage == WorldUsage.CREATE_AND_DELETE){
+            EmptyWorldGenerator.deleteWorld(world, DungeonTower.lobbyLocation).thenAccept { result ->
+                if (!result.success) {
+                    DungeonTower.plugin.logger.warning("Failed to delete world ${world.name}: ${result.message}")
+                    DungeonWorldUnloadTask.shouldUnloadWorlds.add(world.uid)
+                }
+            }
         }
+
+        nextFloorPlayers.clear()
+        currentPlayerFloor.clear()
+        enteredFloors.clear()
+        publicEnteredFloors.clear()
+        exitedFloors.clear()
+        publicExitedFloors.clear()
+
         interrupt()
     }
 
@@ -127,7 +153,25 @@ class DungeonTowerTask(
         nowFloor = firstFloor?.first?:tower.randomFloor()
 
         runTask {
-            world = DungeonTower.worldGenerator.createEmptyWorld("dungeon")
+            val emptyWorld = when(DungeonTower.worldUsage) {
+                WorldUsage.REUSE -> {
+                    val usingWorlds = DungeonTower.partiesData.values.mapNotNull {
+                        it?.currentTask?.getNullableWorld()?.uid
+                    }
+                    val emptyWorlds = DungeonTower.worlds.filter {
+                        !usingWorlds.contains(it)
+                    }.mapNotNull { Bukkit.getWorld(it) }
+                    if (emptyWorlds.isNotEmpty()) {
+                        emptyWorlds.random()
+                    } else {
+                        DungeonTower.worldGenerator.createEmptyWorld("dungeon")
+                    }
+                }
+                WorldUsage.CREATE_AND_DELETE -> {
+                    DungeonTower.worldGenerator.createEmptyWorld("dungeon")
+                }
+            }
+            world = emptyWorld
             tower.worldGameRules.forEach { (rule, value) ->
                 @Suppress("DEPRECATION") //他にやり方が思いつかないので一旦これで
                 world.setGameRuleValue(rule.name, value.toString())
@@ -270,14 +314,15 @@ class DungeonTowerTask(
 
                         nowFloorNum++
 
+                        nowFloor.killMobs(world)
                         nowFloor.removeFloor(world)
 
-                        nowFloor = floor.randomSubFloor()
-                        nowFloor.generateFloor(tower, world, nowFloorNum, party).thenAccept {
-                            if (isInterrupted) return@thenAccept
+                        CompletableFuture.runAsync {
+                            nowFloor = floor.randomSubFloor(nowFloorNum)
+                            nowFloor.generateFloor(tower, world, nowFloorNum, party).join()
+                            if (isInterrupted) return@runAsync
                             DungeonTower.util.runTask {
                                 nowFloor.activate()
-                                party.smokeStan(60)
                                 unlockedChest = false
                                 party.teleport(nowFloor.previousFloorStairs.random().add(0.0,1.1,0.0))
                                 callCommand(nowFloor)
@@ -288,6 +333,7 @@ class DungeonTowerTask(
                                     player.removePotionEffect(PotionEffectType.BLINDNESS)
                                     stepItems(player)
                                 }
+                                party.smokeStan(60)
                                 createFloorNow = false
                             }
                         }

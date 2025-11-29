@@ -10,6 +10,7 @@ import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.utils.sendMessage
 import tororo1066.tororopluginapi.utils.toPlayer
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 
 class PartyData: Cloneable {
     val players = HashMap<UUID,UserData>()
@@ -29,27 +30,22 @@ class PartyData: Cloneable {
     fun smokeStan(tick: Int){
         players.keys.forEach {
             val p = it.toPlayer()?:return@forEach
-            p.addPotionEffect(PotionEffect(PotionEffectType.SLOW,tick,10,false,false,false))
-            p.addPotionEffect(PotionEffect(PotionEffectType.JUMP,tick,200,false,false,false))
+            p.addPotionEffect(PotionEffect(PotionEffectType.SLOWNESS,tick,10,false,false,false))
+            p.addPotionEffect(PotionEffect(PotionEffectType.JUMP_BOOST,tick,200,false,false,false))
             p.addPotionEffect(PotionEffect(PotionEffectType.BLINDNESS,tick,1,false,false,false))
         }
     }
 
-    fun teleport(loc: Location){
+    fun teleport(loc: Location) {
         players.keys.forEach {
-            it.toPlayer()?.teleport(loc)
-        }
-    }
-
-    fun actionBar(str: SStr){
-        players.keys.forEach {
-            it.toPlayer()?.sendActionBar(str.toPaperComponent())
-        }
-    }
-
-    fun scoreboard(scoreboard: Scoreboard){
-        players.keys.forEach {
-            it.toPlayer()?.scoreboard = scoreboard
+            val p = it.toPlayer() ?: return@forEach
+            p.teleport(loc)
+//            p.teleportAsync(loc).exceptionally { ex ->
+//                p.sendMessage(DungeonTower.prefix + SStr("&cテレポートに失敗しました 再試行中..."))
+//                p.teleport(loc)
+//                ex.printStackTrace()
+//                null
+//            }
         }
     }
 

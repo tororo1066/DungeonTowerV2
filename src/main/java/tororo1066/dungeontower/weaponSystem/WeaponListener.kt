@@ -15,6 +15,8 @@ class WeaponListener {
         val wand = currentCast.wand as? Wand ?: return
         val customWeapon = CustomWeapon.getWeapon(wand) ?: return
         currentCast.variables.set("custom_weapon_level", customWeapon.level)
+        val currentData = customWeapon.getCurrentLevelData() ?: return
+        currentCast.variables.set("custom_weapon_scale", currentData.levelScale)
     }
 
     @SEventHandler

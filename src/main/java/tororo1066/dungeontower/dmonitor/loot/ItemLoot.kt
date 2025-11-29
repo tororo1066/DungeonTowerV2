@@ -28,6 +28,7 @@ class ItemLoot: AbstractLootElement() {
     var removeOnExit: Boolean = false
     var removeOnDeath: Boolean = true
 
+    @Suppress("UNCHECKED_CAST")
     override fun run(context: IActionContext): ActionResult {
         val parameters = context.publicContext.parameters
         val items = parameters["loot.items"] as? MutableList<ItemStack> ?: return ActionResult.noParameters("Loot items not found")

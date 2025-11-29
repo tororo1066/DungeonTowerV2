@@ -106,11 +106,6 @@ class CustomWeapon private constructor(val wand: Wand) {
         wand.mage = null
     }
 
-    fun setCurrentMaxLevel(currentMaxLevel: Int) {
-        this.currentMaxLevel = currentMaxLevel
-        wand.configure("current_max_level", currentMaxLevel)
-    }
-
     fun getCurrentLevelData(): LevelData? {
         return levelData.entries.firstOrNull { it.key.contains(level) }?.value
     }

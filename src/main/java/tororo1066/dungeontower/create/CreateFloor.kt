@@ -1,6 +1,5 @@
 package tororo1066.dungeontower.create
 
-import org.bukkit.GameRule
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.configuration.file.YamlConfiguration
@@ -13,7 +12,6 @@ import tororo1066.dungeontower.data.FloorData
 import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.defaultMenus.LargeSInventory
-import tororo1066.tororopluginapi.sInventory.SInventory
 import tororo1066.tororopluginapi.sInventory.SInventoryItem
 import tororo1066.tororopluginapi.sItem.SItem
 import tororo1066.tororopluginapi.utils.LocType
@@ -116,6 +114,12 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
 
                     moveChildInventory(settingInv,p)
                 },
+            createNullableInputItem(SItem(Material.WARPED_SIGN).setDisplayName("§aサブフロアのスクリプトを設定する")
+                .addLore("§d現在の値: ${data.subFloorScript}")
+                .addLore("§cこれが有効な場合←は無視されます"),
+                String::class.java,"/<スクリプト名>") { str, _ ->
+                data.subFloorScript = str
+            },
             SInventoryItem(Material.WARPED_STAIRS).setDisplayName("§aタスクをクリアしていない時に階段に上るのを禁止する")
                 .addLore("§d現在の値: ${data.cancelStandOnStairs}").setCanClick(false)
                 .setClickEvent {
@@ -170,12 +174,6 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
 
                     moveChildInventory(inv,p)
                 },
-            SInventoryItem(Material.GLOWSTONE).setDisplayName("§a開始前にチャンクを読み込む")
-                .addLore("§d現在の値: ${data.preLoadChunks}").setCanClick(false)
-                .setClickEvent {
-                    data.preLoadChunks = !data.preLoadChunks
-                    allRenderMenu(p)
-                },
         )
 
         if (isEdit){
@@ -223,9 +221,9 @@ class CreateFloor(val data: FloorData, val isEdit: Boolean): LargeSInventory(SJa
         config.set("joinCommands",data.joinCommands)
         config.set("parallelFloorOrigin",data.parallelFloorOrigin?.toLocString(LocType.BLOCK_COMMA))
         config.set("subFloors",data.subFloors.map { "${it.first},${it.second}" })
+        config.set("subFloorScript",data.subFloorScript)
         config.set("cancelStandOnStairs",data.cancelStandOnStairs)
         config.set("autoFinishedTask",data.autoFinishedTask)
-        config.set("preLoadChunks",data.preLoadChunks)
         config.set("regionFlags",data.regionFlags)
 
         SJavaPlugin.sConfig.asyncSaveConfig(config,"floors/${data.internalName}").thenAccept {

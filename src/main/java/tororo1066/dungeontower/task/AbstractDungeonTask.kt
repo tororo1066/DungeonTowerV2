@@ -189,6 +189,7 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
                 DungeonTower.partiesData.remove(uuid)
                 DungeonTower.playNow.remove(uuid)
             }
+            party.currentTask = null
             onEnd()
         }
         Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {

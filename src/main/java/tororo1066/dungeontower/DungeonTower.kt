@@ -31,10 +31,6 @@ import tororo1066.dungeontower.dmonitor.workspace.LootWorkspace
 import tororo1066.dungeontower.dmonitor.workspace.SpawnerWorkspace
 import tororo1066.dungeontower.dmonitor.workspace.TowerWorkspace
 import tororo1066.dungeontower.logging.TowerLogDB
-import tororo1066.dungeontower.script.ClearNumberFunction
-import tororo1066.dungeontower.script.TodayClearNumberFunction
-import tororo1066.dungeontower.script.TodayEntryNumberFunction
-import tororo1066.dungeontower.task.DungeonWorldUnloadTask
 import tororo1066.dungeontower.weaponSystem.Attribute
 import tororo1066.dungeontower.weaponSystem.magic.AppendDungeonLore
 import tororo1066.tororopluginapi.SInput
@@ -55,6 +51,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         lateinit var floorWorld: World
         var customWeaponEnabled = false
         var autoCreateCustomWeapon = false
+        var worldUsage = WorldUsage.REUSE
 
         val prefix = SStr("&b[&4Dungeon&cTower&b]&r")
         lateinit var mythic: BukkitAPIHelper //スポナーでmmのmobを湧かすために使用
@@ -74,6 +71,8 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         val partiesData = HashMap<UUID, PartyData?>() //パーティのデータ PartyDataがnullじゃない人がリーダー
         val playNow = ArrayList<UUID>() //ダンジョンに挑戦中のプレイヤー
 
+        val worlds = ArrayList<UUID>() //ダンジョンのワールドのUUID
+
         const val DUNGEON_LOOT_ITEM = "dlootitem"
         const val DUNGEON_LOOT_ANNOUNCE = "dlootannounce"
         const val DUNGEON_LOOT_REMOVE_FLOOR_COUNT = "dlootremovefloor"
@@ -91,6 +90,8 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
             y = plugin.config.getInt("y",1)
             customWeaponEnabled = plugin.config.getBoolean("customWeaponEnabled")
             autoCreateCustomWeapon = plugin.config.getBoolean("autoCreateCustomWeapon", false)
+            worldUsage = WorldUsage.valueOf(plugin.config.getString("worldUsage","REUSE")!!.uppercase())
+
             Bukkit.getWorld(plugin.config.getString("floorWorld","world")!!)?.let { floorWorld = it }
             lobbyLocation = plugin.config.getLocation("lobbyLocation", Location(null,0.0,0.0,0.0))!!
 
@@ -149,9 +150,6 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         DungeonCommand()
         DungeonTaskCommand()
         TowerLogDB()
-        TodayClearNumberFunction.registerFunction()
-        ClearNumberFunction.registerFunction()
-        TodayEntryNumberFunction.registerFunction()
 
         actionStorage.registerAction(GetSubAccounts::class.java)
         actionStorage.registerAction(FinishTask::class.java)
@@ -179,6 +177,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         workspaceStorage.registerWorkspace(FloorWorkspace)
         workspaceStorage.registerWorkspace(LootWorkspace)
         workspaceStorage.registerWorkspace(SpawnerWorkspace)
+        workspaceStorage.registerWorkspace(TowerWorkspace)
 
         ActionFactory.registerActionClass("AppendDungeonLore", AppendDungeonLore::class.java)
 
@@ -207,7 +206,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
             }
         }
 
-        Bukkit.getScheduler().runTaskTimer(this, DungeonWorldUnloadTask(), 20L * 60 * 5, 20L * 60 * 5)
+        DungeonWorldUnloadTask()
     }
 
     override fun onEnd() {

@@ -40,7 +40,7 @@ class FilterNotConflictFloor: IAbstractAction {
                     hashMapOf("floorName" to floorName, "rotation" to rotation)
                 }
             }
-            context.publicContext.parameters[listName ?: "floors"] = list
+            context.publicContext.parameters[listName ?: "noConflictFloors"] = list
             return ActionResult.success(reason)
         }
 
