@@ -5,10 +5,15 @@ import com.sk89q.worldedit.bukkit.BukkitWorld
 import com.sk89q.worldguard.protection.regions.GlobalProtectedRegion
 import net.kyori.adventure.text.Component
 import org.bukkit.*
+import org.bukkit.block.Container
+import org.bukkit.block.TileState
 import org.bukkit.entity.Player
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.PlayerDeathEvent
+import org.bukkit.event.inventory.InventoryAction
+import org.bukkit.event.inventory.InventoryClickEvent
+import org.bukkit.event.inventory.InventoryDragEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerVelocityEvent
@@ -68,40 +73,6 @@ class DungeonTowerTask(
     val exitedFloors = HashMap<UUID, ArrayList<FloorData>>()
     val publicExitedFloors = ArrayList<FloorData>()
 
-
-    override fun onEnd() {
-        party.players.keys.forEach { uuid ->
-            moveLockPlayers.remove(uuid)
-        }
-        nowFloor.removeFloor(world)
-        end = true
-        sEvent.unregisterAll()
-        DungeonTower.regionContainer.get(BukkitWorld(world))?.removeRegion("__global__")
-//        EmptyWorldGenerator.deleteWorld(world, lobbyLocation).thenAccept { result ->
-//            if (!result.success) {
-//                SJavaPlugin.plugin.getLogger().warning("Failed to delete world ${world.name}: ${result.message}")
-//                DungeonWorldUnloadTask.shouldUnloadWorlds.add(world.uid)
-//            }
-//        }
-        if (DungeonTower.worldUsage == WorldUsage.CREATE_AND_DELETE){
-            EmptyWorldGenerator.deleteWorld(world, DungeonTower.lobbyLocation).thenAccept { result ->
-                if (!result.success) {
-                    DungeonTower.plugin.logger.warning("Failed to delete world ${world.name}: ${result.message}")
-                    DungeonWorldUnloadTask.shouldUnloadWorlds.add(world.uid)
-                }
-            }
-        }
-
-        nextFloorPlayers.clear()
-        currentPlayerFloor.clear()
-        enteredFloors.clear()
-        publicEnteredFloors.clear()
-        exitedFloors.clear()
-        publicExitedFloors.clear()
-
-        interrupt()
-    }
-
     @Synchronized
     fun complete(message: SStr) {
         if (end) return
@@ -115,13 +86,66 @@ class DungeonTowerTask(
             }
             dungeonItemToItem(it.toPlayer()?:return@forEach)
         }
-        end(delay = 0)
+        end()
     }
 
-    fun fail(message: SStr, delay: Long = 0) {
+    fun fail(message: SStr) {
         TowerLogDB.annihilationDungeon(party, tower.internalName)
         party.broadCast(message)
-        end(delay)
+        end()
+    }
+
+    private fun end() {
+        val function = {
+            end = true
+            party.players.forEach { (uuid, _) ->
+                val p = uuid.toPlayer()
+                p?.let {
+                    clearDungeonItems(it)
+                }
+                if (p?.gameMode == GameMode.SPECTATOR){
+                    p.spectatorTarget = null
+                    p.gameMode = GameMode.SURVIVAL
+                }
+                p?.teleport(lobbyLocation)
+                p?.scoreboard = Bukkit.getScoreboardManager().newScoreboard
+            }
+
+            party.players.keys.forEach { uuid ->
+                moveLockPlayers.remove(uuid)
+            }
+            nowFloor.killMobs(world)
+            nowFloor.removeFloor(world)
+
+            sEvent.unregisterAll()
+            DungeonTower.regionContainer.get(BukkitWorld(world))?.removeRegion("__global__")
+            if (DungeonTower.worldUsage == WorldUsage.CREATE_AND_DELETE){
+                EmptyWorldGenerator.deleteWorld(world, DungeonTower.lobbyLocation).thenAccept { result ->
+                    if (!result.success) {
+                        DungeonTower.plugin.logger.warning("Failed to delete world ${world.name}: ${result.message}")
+                        DungeonWorldUnloadTask.shouldUnloadWorlds.add(world.uid)
+                    }
+                }
+            }
+
+            nextFloorPlayers.clear()
+            currentPlayerFloor.clear()
+            enteredFloors.clear()
+            publicEnteredFloors.clear()
+            exitedFloors.clear()
+            publicExitedFloors.clear()
+
+            interrupt()
+
+            party.players.keys.forEach {
+                DungeonTower.partiesData.remove(it)
+                DungeonTower.playNow.remove(it)
+            }
+            party.currentTask = null
+        }
+        Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
+            function.invoke()
+        }, 0)
     }
 
     private fun runTrigger(name: String, player: Player, floor: FloorData) {
@@ -131,6 +155,7 @@ class DungeonTowerTask(
                     workspace = FloorWorkspace
                     parameters.let {
                         it["party.uuid"] = party.partyUUID.toString()
+                        it["tower.name"] = tower.internalName
                         it.putAll(floor.generateParameters())
                         it["floor.num"] = nowFloorNum
                     }
@@ -139,7 +164,8 @@ class DungeonTowerTask(
                 target = player
             }
         ) { section ->
-            section.getString("floor") == floor.internalName
+            val floorRegex = section.getString("floor")
+            floorRegex == null || Regex(floorRegex).matches(floor.internalName)
         }
     }
 
@@ -221,7 +247,7 @@ class DungeonTowerTask(
                     moveLockPlayers.add(uuid)
                 }
                 TowerLogDB.annihilationDungeon(party, tower.internalName)
-                end(delay = 1)
+                end()
             }
         }
 
@@ -255,7 +281,7 @@ class DungeonTowerTask(
             if (party.alivePlayers.isEmpty()){
                 party.broadCast(SStr("&c生きているプレイヤーが退出したため敗北扱いになりました"))
                 TowerLogDB.quitDisbandDungeon(party, tower.internalName)
-                end(delay = 0)
+                end()
                 return@register
             }
         }
@@ -275,6 +301,66 @@ class DungeonTowerTask(
         sEvent.register(EntityDamageByEntityEvent::class.java){ e ->
             if (moveLockPlayers.contains(e.entity.uniqueId)){
                 e.isCancelled = true
+            }
+        }
+
+        sEvent.register(InventoryClickEvent::class.java) { e ->
+            if (!party.players.containsKey(e.whoClicked.uniqueId))return@register
+            val holder = e.inventory.holder as? Container ?: return@register
+            val tileState = holder.block.state as? TileState ?: return@register
+
+            if (tileState.persistentDataContainer.has(DungeonTower.DUNGEON_LOOT_CHEST)) {
+                //アイテムを入れるのを防ぐ
+
+                if (e.clickedInventory == e.inventory) {
+                    val allowed = setOf(
+                        InventoryAction.PICKUP_ALL,
+                        InventoryAction.PICKUP_HALF,
+                        InventoryAction.PICKUP_ONE,
+                        InventoryAction.PICKUP_SOME,
+                        InventoryAction.MOVE_TO_OTHER_INVENTORY
+                    )
+
+                    if (e.action !in allowed) {
+                        e.isCancelled = true
+                    }
+                    return@register
+                }
+
+                if (e.clickedInventory == e.whoClicked.inventory) {
+                    val allowed = setOf(
+                        InventoryAction.PICKUP_ALL,
+                        InventoryAction.PICKUP_HALF,
+                        InventoryAction.PICKUP_ONE,
+                        InventoryAction.PICKUP_SOME,
+                        InventoryAction.PLACE_ALL,
+                        InventoryAction.PLACE_SOME,
+                        InventoryAction.PLACE_ONE,
+                        InventoryAction.SWAP_WITH_CURSOR,
+                        InventoryAction.HOTBAR_SWAP
+                    )
+
+                    if (e.action !in allowed) {
+                        e.isCancelled = true
+                    }
+                    return@register
+                }
+            }
+        }
+
+        sEvent.register(InventoryDragEvent::class.java) { e ->
+            if (!party.players.containsKey(e.whoClicked.uniqueId))return@register
+            val topInventory = e.view.topInventory
+            val holder = topInventory.holder as? Container ?: return@register
+            val tileState = holder.block.state as? TileState ?: return@register
+
+            if (tileState.persistentDataContainer.has(DungeonTower.DUNGEON_LOOT_CHEST)) {
+                for (slot in e.rawSlots) {
+                    if (slot < topInventory.size) {
+                        e.isCancelled = true
+                        return@register
+                    }
+                }
             }
         }
 
@@ -315,26 +401,28 @@ class DungeonTowerTask(
                         nowFloorNum++
 
                         nowFloor.killMobs(world)
-                        nowFloor.removeFloor(world)
+//                        nowFloor.removeFloor(world)
 
                         CompletableFuture.runAsync {
+                            nowFloor.removeFloor(world)
                             nowFloor = floor.randomSubFloor(nowFloorNum)
                             nowFloor.generateFloor(tower, world, nowFloorNum, party).join()
                             if (isInterrupted) return@runAsync
                             DungeonTower.util.runTask {
                                 nowFloor.activate()
                                 unlockedChest = false
-                                party.teleport(nowFloor.previousFloorStairs.random().add(0.0,1.1,0.0))
-                                callCommand(nowFloor)
-                                party.alivePlayers.keys.forEach {
-                                    moveLockPlayers.remove(it)
-                                    val player = it.toPlayer()?:return@forEach
-                                    player.gameMode = GameMode.SURVIVAL
-                                    player.removePotionEffect(PotionEffectType.BLINDNESS)
-                                    stepItems(player)
+                                party.teleport(nowFloor.previousFloorStairs.random().add(0.0,1.1,0.0)).thenAccept {
+                                    callCommand(nowFloor)
+                                    party.alivePlayers.keys.forEach {
+                                        moveLockPlayers.remove(it)
+                                        val player = it.toPlayer()?:return@forEach
+                                        player.gameMode = GameMode.SURVIVAL
+                                        player.removePotionEffect(PotionEffectType.BLINDNESS)
+                                        stepItems(player)
+                                    }
+                                    party.smokeStan(60)
+                                    createFloorNow = false
                                 }
-                                party.smokeStan(60)
-                                createFloorNow = false
                             }
                         }
                     }
@@ -366,10 +454,9 @@ class DungeonTowerTask(
 
         while (!end){
 
+            val time = if (!createFloorNow) nowFloor.time-- else nowFloor.time
+
             DungeonTower.util.runTask {
-                if (!createFloorNow) {
-                    nowFloor.time--
-                }
 
                 for (uuid in party.players.keys) {
                     val player = uuid.toPlayer()?:return@runTask
@@ -428,7 +515,7 @@ class DungeonTowerTask(
 
                     obj.getScore("  §7残り時間" +
                             " §a${
-                                if (nowFloor.time <= 0) "0秒" else nowFloor.time.toLong()
+                                if (time <= 0) "0秒" else time.toLong()
                                     .toJPNDateStr(DateType.SECOND,DateType.MINUTE,false)
                             }").score = scoreInt
                     scoreInt--
@@ -453,7 +540,7 @@ class DungeonTowerTask(
                 }
             }
 
-            if (nowFloor.time == 0){
+            if (time == 0){
 //                runTask {
 //                    party.players.keys.forEach { uuid ->
 //                        moveLockPlayers.add(uuid)
@@ -462,7 +549,7 @@ class DungeonTowerTask(
 //                }
                 party.broadCast(SStr("&c&l時間切れ..."))
                 TowerLogDB.timeOutDungeon(party, tower.internalName)
-                end(1)
+                end()
             }
 
             try {

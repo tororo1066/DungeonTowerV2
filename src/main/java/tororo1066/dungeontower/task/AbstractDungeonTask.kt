@@ -173,29 +173,7 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         })
     }
 
-    protected fun end(delay: Long = 60) {
-        val function = {
-            party.players.forEach { (uuid, _) ->
-                val p = uuid.toPlayer()
-                p?.let {
-                    clearDungeonItems(it)
-                }
-                if (p?.gameMode == GameMode.SPECTATOR){
-                    p.spectatorTarget = null
-                    p.gameMode = GameMode.SURVIVAL
-                }
-                p?.teleport(lobbyLocation)
-                p?.scoreboard = Bukkit.getScoreboardManager().newScoreboard
-                DungeonTower.partiesData.remove(uuid)
-                DungeonTower.playNow.remove(uuid)
-            }
-            party.currentTask = null
-            onEnd()
-        }
-        Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
-            function.invoke()
-        }, delay)
-    }
+
 
     protected fun getInFloor(mainFloor: FloorData, p: Player): FloorData? {
         fun check(floor: FloorData): Boolean {
@@ -220,10 +198,6 @@ abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): 
         }
 
         return null
-    }
-
-    protected open fun onEnd(){
-
     }
 
 }

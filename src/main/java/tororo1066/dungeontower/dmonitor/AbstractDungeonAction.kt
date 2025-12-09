@@ -21,9 +21,13 @@ abstract class AbstractDungeonAction: IAbstractAction {
         contract {
             callsInPlace(unit, InvocationKind.AT_MOST_ONCE)
         }
-        val parameters = publicContext.parameters
-        val uuid = UUID.fromString((parameters["party.uuid"] ?: return ActionResult.noParameters("Party UUID not found")) as String)
-        val party = DungeonTower.partiesData.entries.find { it.value?.partyUUID == uuid }?.value ?: return ActionResult.noParameters("Party not found")
+        val party = getParty() ?: return ActionResult.noParameters("Party not found")
         return unit(party)
+    }
+
+    protected fun IActionContext.getParty(): PartyData? {
+        val parameters = publicContext.parameters
+        val uuid = UUID.fromString((parameters["party.uuid"] ?: return null) as String)
+        return DungeonTower.partiesData.entries.find { it.value?.partyUUID == uuid }?.value
     }
 }

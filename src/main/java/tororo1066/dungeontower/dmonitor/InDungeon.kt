@@ -11,14 +11,21 @@ class InDungeon: AbstractDungeonAction() {
     var failActions: Execute = Execute.empty()
 
     override fun run(context: IActionContext): ActionResult {
-        return context.partyAction { party ->
-            if (party.currentTask != null) {
-                actions(context)
-                ActionResult.success()
-            } else {
-                failActions(context)
-                ActionResult.success()
-            }
+//        return context.partyAction { party ->
+//            if (party.currentTask != null) {
+//                actions(context)
+//                ActionResult.success()
+//            } else {
+//                failActions(context)
+//                ActionResult.success()
+//            }
+//        }
+        if (context.getParty() != null) {
+            actions(context)
+            return ActionResult.success()
+        } else {
+            failActions(context)
+            return ActionResult.success()
         }
     }
 

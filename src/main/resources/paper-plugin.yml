@@ -8,6 +8,8 @@ dependencies:
   server:
     FastAsyncWorldEdit:
       load: BEFORE
+    WorldGuard:
+      load: BEFORE
     MythicMobs:
       load: BEFORE
     Magic:

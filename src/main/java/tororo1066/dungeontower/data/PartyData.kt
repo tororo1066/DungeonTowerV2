@@ -36,17 +36,17 @@ class PartyData: Cloneable {
         }
     }
 
-    fun teleport(loc: Location) {
-        players.keys.forEach {
-            val p = it.toPlayer() ?: return@forEach
-            p.teleport(loc)
-//            p.teleportAsync(loc).exceptionally { ex ->
-//                p.sendMessage(DungeonTower.prefix + SStr("&cテレポートに失敗しました 再試行中..."))
-//                p.teleport(loc)
-//                ex.printStackTrace()
-//                null
-//            }
+    fun teleport(loc: Location): CompletableFuture<Void> {
+        val futures = players.keys.map {
+            val p = it.toPlayer() ?: return@map CompletableFuture.completedFuture(null)
+            p.teleportAsync(loc).exceptionally { ex ->
+                p.sendMessage(DungeonTower.prefix + SStr("&cテレポートに失敗しました 再試行中..."))
+                p.teleport(loc)
+                ex.printStackTrace()
+                null
+            }
         }
+        return CompletableFuture.allOf(*futures.toTypedArray())
     }
 
     public override fun clone(): PartyData {

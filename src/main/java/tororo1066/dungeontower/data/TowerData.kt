@@ -27,7 +27,6 @@ class TowerData: Cloneable {
     val firstFloor = ArrayList<Pair<Int,FloorData>>()
     var challengeItem: ItemStack? = null
     var challengeScript: String? = null
-    var floorDisplayScript: String? = null
 
     var entryScript: String? = null
 
@@ -57,50 +56,56 @@ class TowerData: Cloneable {
 
     fun entryTower(p: Player, partyData: PartyData): CompletableFuture<Void> {
         DungeonCommand.entryCooldown.add(p.uniqueId)
-        return CompletableFuture.runAsync {
-            canChallenge(p, partyData).thenAcceptAsync { bool ->
-                if (!bool) return@thenAcceptAsync
-                if (entryScript != null){
-                    val script = TowerWorkspace.actionConfigurations[entryScript]
+        return canChallenge(p, partyData).thenAcceptAsync { bool ->
+            if (!bool) return@thenAcceptAsync
+            if (entryScript != null){
+                val script = TowerWorkspace.actionConfigurations[entryScript]
 
-                    if (script == null) {
-                        p.sendPrefixMsg(SStr("&c入場時に実行するスクリプトが見つかりません"))
-                        DungeonCommand.entryCooldown.remove(p.uniqueId)
-                        return@thenAcceptAsync
-                    }
-
-                    val context = DungeonTower.actionStorage.createActionContext(
-                        DungeonTower.actionStorage.createPublicContext().apply {
-                            parameters["entry.name"] = p.name
-                            parameters["entry.uuid"] = p.uniqueId.toString()
-                            parameters["entry.ip"] = p.address.address.hostAddress
-                        }
-                    ).apply {
-                        target = p
-                        location = p.location
-                    }
-                    script.run(context, true, null).join()
-
-                    val floorNum = (context.publicContext.parameters["entry.floor.num"] as? Int)
-                    val floorName = context.publicContext.parameters["entry.floor.name"] as? String
-                    val floorData = DungeonTower.floorData[floorName]?.newInstance()
-                    partyData.players.keys.forEach {
-                        DungeonTower.playNow.add(it)
-                    }
-                    DungeonTower.util.runTask {
-                        DungeonTowerTask(partyData, this, floorData to floorNum).start()
-                    }
-                } else {
-                    partyData.players.keys.forEach {
-                        DungeonTower.playNow.add(it)
-                    }
-                    DungeonTower.util.runTask {
-                        DungeonTowerTask(partyData, this).start()
-                    }
+                if (script == null) {
+                    p.sendPrefixMsg(SStr("&c入場時に実行するスクリプトが見つかりません"))
+                    DungeonCommand.entryCooldown.remove(p.uniqueId)
+                    return@thenAcceptAsync
                 }
 
-                DungeonCommand.entryCooldown.remove(p.uniqueId)
-            }.join()
+                val context = DungeonTower.actionStorage.createActionContext(
+                    DungeonTower.actionStorage.createPublicContext().apply {
+                        parameters["entry.name"] = p.name
+                        parameters["entry.uuid"] = p.uniqueId.toString()
+                        parameters["entry.ip"] = p.address.address.hostAddress
+                        parameters["party.uuid"] = partyData.partyUUID.toString()
+                        workspace = TowerWorkspace
+                    }
+                ).apply {
+                    target = p
+                    location = p.location
+                }
+                script.run(context, true, null).join()
+
+                val floorNum = (context.publicContext.parameters["entry.floor.num"] as? Int)
+                val floorName = context.publicContext.parameters["entry.floor.name"] as? String
+                val floorData = DungeonTower.floorData[floorName]?.newInstance()
+                partyData.players.keys.forEach {
+                    DungeonTower.playNow.add(it)
+                }
+                DungeonTower.util.runTask {
+                    DungeonTowerTask(partyData, this, floorData to floorNum).start()
+                }
+            } else {
+                partyData.players.keys.forEach {
+                    DungeonTower.playNow.add(it)
+                }
+                DungeonTower.util.runTask {
+                    DungeonTowerTask(partyData, this).start()
+                }
+            }
+
+            DungeonCommand.entryCooldown.remove(p.uniqueId)
+        }.exceptionally { ex ->
+            p.sendPrefixMsg(SStr("&cタワーへの入場中にエラーが発生しました"))
+            DungeonTower.plugin.logger.warning("Error while $internalName entry tower for ${p.name} (${p.uniqueId})")
+            ex.printStackTrace()
+            DungeonCommand.entryCooldown.remove(p.uniqueId)
+            null
         }
     }
 
@@ -128,6 +133,8 @@ class TowerData: Cloneable {
                         parameters["entry.name"] = p.name
                         parameters["entry.uuid"] = p.uniqueId.toString()
                         parameters["entry.ip"] = p.address.address.hostAddress
+                        parameters["party.uuid"] = partyData.partyUUID.toString()
+                        workspace = TowerWorkspace
                     }
                 ).apply {
                     target = p
@@ -203,7 +210,6 @@ class TowerData: Cloneable {
                 challengeItem = yml.getItemStack("challengeItem")
                 challengeScript = yml.getString("challengeScript")
                 entryScript = yml.getString("entryScript")
-                floorDisplayScript = yml.getString("floorDisplayScript")
                 playerLimit = yml.getInt("playerLimit",-1)
                 val section = yml.getConfigurationSection("worldGameRules")
                 if (section != null) {

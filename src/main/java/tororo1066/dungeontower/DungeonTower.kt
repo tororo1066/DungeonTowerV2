@@ -7,6 +7,7 @@ import com.sk89q.worldguard.protection.regions.RegionContainer
 import io.lumine.mythic.bukkit.BukkitAPIHelper
 import org.bukkit.Bukkit
 import org.bukkit.Location
+import org.bukkit.NamespacedKey
 import org.bukkit.World
 import org.bukkit.command.CommandSender
 import org.bukkit.event.EventPriority
@@ -73,6 +74,9 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
 
         val worlds = ArrayList<UUID>() //ダンジョンのワールドのUUID
 
+        val DUNGEON_LOOT_CHEST by lazy {
+            NamespacedKey(plugin, "dungeon_loot_chest")
+        }
         const val DUNGEON_LOOT_ITEM = "dlootitem"
         const val DUNGEON_LOOT_ANNOUNCE = "dlootannounce"
         const val DUNGEON_LOOT_REMOVE_FLOOR_COUNT = "dlootremovefloor"
@@ -132,7 +136,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
             Attribute.loadAttributes()
 
             DungeonCommand()
-            TowerLogDB()
+            TowerLogDB.reload()
         }
     }
 
@@ -149,7 +153,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         reloadDungeonConfig()
         DungeonCommand()
         DungeonTaskCommand()
-        TowerLogDB()
+        TowerLogDB
 
         actionStorage.registerAction(GetSubAccounts::class.java)
         actionStorage.registerAction(FinishTask::class.java)
@@ -158,6 +162,7 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         actionStorage.registerAction(InDungeon::class.java)
         actionStorage.registerAction(SetLobbyLocation::class.java)
         actionStorage.registerAction(CompleteDungeon::class.java)
+        actionStorage.registerAction(SetCurrentTime::class.java)
 
         actionStorage.registerAction(SupplyLoot::class.java)
         actionStorage.registerAction(ItemLoot::class.java)
@@ -210,6 +215,6 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
     }
 
     override fun onEnd() {
-
+        TowerLogDB.database.close()
     }
 }

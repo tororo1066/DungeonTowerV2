@@ -9,7 +9,6 @@ java.toolchain.languageVersion.set(JavaLanguageVersion.of(21))
 
 repositories {
     mavenCentral()
-    mavenLocal()
     maven {
         name = 'papermc-repo'
         url = 'https://repo.papermc.io/repository/maven-public/'
@@ -52,9 +51,9 @@ dependencies {
     compileOnly "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
 
     // Import the TororoPluginAPI
-    api 'tororo1066:tororopluginapi:ae62f87'
-    compileOnly 'tororo1066:base:ae62f87'
-    compileOnly 'tororo1066:commandapi:ae62f87'
+    api 'tororo1066:tororopluginapi:eb63fb7'
+    compileOnly 'tororo1066:base:eb63fb7'
+    compileOnly 'tororo1066:commandapi:eb63fb7'
 
     // Import the MythicMobs API
     compileOnly "io.lumine:Mythic-Dist:5.10.1"

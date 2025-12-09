@@ -92,19 +92,6 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
                 }
                 moveChildInventory(inv,e.whoClicked as Player)
             },
-            createNullableInputItem(SItem(Material.REDSTONE).setDisplayName("§aフロアの表示スクリプトを設定する")
-                .addLore("§d現在の値:${data.floorDisplayScript}"),String::class.java) { str, _ ->
-                if (str == null){
-                    data.floorDisplayScript = null
-                    return@createNullableInputItem
-                }
-                val file = File(DungeonTower.plugin.dataFolder, str)
-                if (!file.exists()) {
-                    p.sendPrefixMsg(SStr("&cファイルが存在しません"))
-                    return@createNullableInputItem
-                }
-                data.floorDisplayScript = file.toRelativeString(DungeonTower.plugin.dataFolder)
-            },
             createInputItem(SItem(Material.PINK_WOOL).setDisplayName("§a並列最大人数を設定する")
                 .addLore("§d現在の値:${data.playerLimit}"),Int::class.java) { int, _ ->
                 data.playerLimit = int
@@ -251,7 +238,6 @@ class CreateTower(val data: TowerData, val isEdit: Boolean): LargeSInventory(SJa
         config.set("challengeItem",data.challengeItem)
         config.set("challengeScript",data.challengeScript)
         config.set("entryScript",data.entryScript)
-        config.set("floorDisplayScript",data.floorDisplayScript)
         config.set("playerLimit",data.playerLimit)
         config.set("firstFloor",data.firstFloor.map { "${it.first},${it.second.internalName}" })
         config.set("worldGameRules",data.worldGameRules.mapKeys { it.key.name })

@@ -1,6 +1,5 @@
 package tororo1066.dungeontower.data
 
-import com.fastasyncworldedit.core.extent.clipboard.MemoryOptimizedClipboard
 import com.sk89q.worldedit.WorldEdit
 import com.sk89q.worldedit.bukkit.BukkitWorld
 import com.sk89q.worldedit.extent.clipboard.BlockArrayClipboard
@@ -12,9 +11,7 @@ import com.sk89q.worldedit.regions.CuboidRegion
 import com.sk89q.worldedit.session.ClipboardHolder
 import com.sk89q.worldedit.world.block.BlockTypes
 import com.sk89q.worldguard.protection.regions.ProtectedCuboidRegion
-import io.lumine.mythic.bukkit.BukkitAPIHelper
 import io.lumine.mythic.bukkit.MythicBukkit
-import io.lumine.mythic.core.mobs.ActiveMob
 import net.kyori.adventure.text.Component
 import org.bukkit.*
 import org.bukkit.block.BlockFace
@@ -36,6 +33,7 @@ import tororo1066.tororopluginapi.SDebug
 import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.sEvent.SEvent
+import tororo1066.tororopluginapi.sItem.SItem
 import tororo1066.tororopluginapi.utils.LocType
 import tororo1066.tororopluginapi.utils.setYawL
 import tororo1066.tororopluginapi.utils.toLocString
@@ -43,6 +41,7 @@ import java.io.File
 import java.util.Random
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.*
 import kotlin.random.nextInt
@@ -69,7 +68,7 @@ class FloorData: Cloneable {
 
     val previousFloorStairs = ArrayList<Location>()
     val nextFloorStairs = ArrayList<Location>()//使わないかもしれない
-    val spawners = HashMap<UUID, SpawnerRunnable>()
+    val spawners = ConcurrentHashMap<UUID, SpawnerRunnable>()
 
     val joinCommands = ArrayList<String>()
 
@@ -147,6 +146,7 @@ class FloorData: Cloneable {
                         DungeonTower.actionStorage.createPublicContext().apply {
                             workspace = FloorWorkspace
                             parameters.let {
+                                it["tower.name"] = towerData.internalName
                                 it["floor.name"] = floorName
                                 it["floor.num"] = floorNum
                                 it["party.uuid"] = partyData.partyUUID.toString()
@@ -158,7 +158,8 @@ class FloorData: Cloneable {
                         this.location = e.entity.location
                     }
                 ) { section ->
-                    section.getString("floor") == floorName
+                    val floorRegex = section.getString("floor")
+                    floorRegex == null || Regex(floorRegex).matches(floorName)
                 }
             }
         }
@@ -195,24 +196,6 @@ class FloorData: Cloneable {
         }
 
         fun stop() {
-//            Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
-//                location.world.entities.forEach {
-//                    if (it is Player) return@forEach
-//                    val mob = DungeonTower.mythic.getMythicMobInstance(it)
-//                    if (mob != null) {
-//                        MythicBukkit.inst().skillManager.auraManager.getAuraRegistry(mob.uniqueId)?.let { registry ->
-//                            registry.auras.forEach { aura ->
-//                                registry.removeAll(aura.key)
-//                            }
-//                        }
-//                        mob.setDead()
-//                        mob.setDespawned()
-//                        mob.setUnloaded()
-//
-//                    }
-//                    it.remove()
-//                }
-//            })
             sEvent.unregisterAll()
             if (activated) {
                 cancel()
@@ -299,7 +282,6 @@ class FloorData: Cloneable {
         }
     }
 
-    @Suppress("DEPRECATION")
     private fun generateFloor(towerData: TowerData, partyData: PartyData, floorNum: Int, location: Location, direction: Double) {
         SDebug.broadcastDebug(3, "GeneratingFloor $internalName (step: $generateStep) in ${location.blockX},${location.blockY},${location.blockZ} with direction $direction")
 
@@ -383,6 +365,7 @@ class FloorData: Cloneable {
                 round((z - originLocation.blockZ) * cos(modifiedDirection) + (x - originLocation.blockX) * sin(modifiedDirection))
             )
 
+            @Suppress("DEPRECATION")
             when (block.type) {
 
                 Material.OAK_SIGN -> {
@@ -395,13 +378,26 @@ class FloorData: Cloneable {
                             DungeonTower.util.runTask {
                                 placeLoc.block.type = Material.CHEST
                                 val chest = placeLoc.block.state as Chest
-                                (chest.blockData as Directional).facing = (data.blockData as org.bukkit.block.data.type.Sign).rotation
                                 chest.customName(Component.text(loot.displayName))
                                 if (!autoFinishedTask) {
-                                    chest.setLock("§c§l${Random().nextDouble(10000.0)}")
+                                    //絶対に解錠できないようにする
+                                    chest.setLockItem(
+                                        SItem(Material.BARRIER)
+                                            .setCustomData(
+                                                DungeonTower.plugin,
+                                                "dungeon_lock_chest",
+                                                PersistentDataType.INTEGER,
+                                                1
+                                            ).build()
+                                    )
                                 }
+                                chest.persistentDataContainer.set(
+                                    DungeonTower.DUNGEON_LOOT_CHEST,
+                                    PersistentDataType.INTEGER,
+                                    1
+                                )
                                 chest.update()
-                                loot.supplyLoot(chest.location)
+                                loot.supplyLoot(chest.location, partyData.partyUUID, towerData.internalName, internalName, floorNum)
                                 val blockData = chest.blockData as Directional
                                 blockData.facing = (data.blockData as org.bukkit.block.data.type.Sign).rotation
                                 chest.blockData = blockData

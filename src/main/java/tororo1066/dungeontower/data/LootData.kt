@@ -5,6 +5,7 @@ import org.bukkit.configuration.file.YamlConfiguration
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.dmonitor.workspace.LootWorkspace
 import java.io.File
+import java.util.UUID
 
 class LootData: Cloneable {
 
@@ -24,13 +25,17 @@ class LootData: Cloneable {
         }
     }
 
-    fun supplyLoot(location: Location) {
+    fun supplyLoot(location: Location, partyUUID: UUID, towerName: String, floorName: String, floorNum: Int) {
         val scriptName = displayMonitorScript ?: internalName
         val script = LootWorkspace.lootScripts[scriptName] ?: return
         script.run(
             DungeonTower.actionStorage.createActionContext(
                 DungeonTower.actionStorage.createPublicContext().apply {
                     workspace = LootWorkspace
+                    parameters["party.uuid"] = partyUUID.toString()
+                    parameters["tower.name"] = towerName
+                    parameters["floor.name"] = floorName
+                    parameters["floor.num"] = floorNum
                 }
             ).apply {
                 this.location = location

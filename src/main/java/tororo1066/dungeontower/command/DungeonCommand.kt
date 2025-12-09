@@ -194,6 +194,7 @@ class DungeonCommand: SCommand(
             accepts[it.sender.uniqueId]!!.remove(p.uniqueId)
             val party = DungeonTower.partiesData[it.sender.uniqueId]!!
             party.players[p.uniqueId] = UserData(p.uniqueId,p.name,p.address.address.hostAddress)
+            DungeonTower.partiesData[p.uniqueId] = null
             it.sender.sendPrefixMsg(SStr("&a${p.name}をパーティーに追加しました"))
             party.broadCast(SStr("&a${p.name}がパーティーに参加しました"))
         }
