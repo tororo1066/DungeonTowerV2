@@ -11,9 +11,6 @@ data class Attribute(
     val activeIcon: String,
     val priority: Int = 0,
 ) {
-    override fun toString(): String {
-        return "Element(name='$name', displayName='$displayName', icon='$icon', activeIcon='$activeIcon', priority=$priority)"
-    }
 
     companion object {
         val elementAttributes = HashMap<String, Attribute>()

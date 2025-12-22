@@ -2,7 +2,6 @@ package tororo1066.dungeontower.task
 
 import com.google.common.io.ByteStreams
 import org.bukkit.Bukkit
-import org.bukkit.GameMode
 import org.bukkit.NamespacedKey
 import org.bukkit.entity.Player
 import org.bukkit.event.inventory.InventoryType
@@ -14,55 +13,11 @@ import tororo1066.dungeontower.data.PartyData
 import tororo1066.dungeontower.data.TowerData
 import tororo1066.tororopluginapi.sEvent.SEvent
 import tororo1066.tororopluginapi.sItem.SItem
-import tororo1066.tororopluginapi.utils.toPlayer
 
-abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData): Thread() {
-
-    class Lock {
-
-        @Volatile
-        private var isLock = false
-        @Volatile
-        private var hadLocked = false
-
-        fun lock(){
-            synchronized(this){
-                if (hadLocked){
-                    return
-                }
-                isLock = true
-            }
-            try {
-                while (isLock){
-                    sleep(1)
-                }
-            } catch (_: InterruptedException) {
-
-            }
-        }
-
-        fun unlock(){
-            synchronized(this){
-                hadLocked = true
-                isLock = false
-            }
-        }
-    }
+abstract class AbstractDungeonTask(val party: PartyData, val tower: TowerData) {
 
     val sEvent = SEvent(DungeonTower.plugin)
     var lobbyLocation = DungeonTower.lobbyLocation
-
-
-    protected fun runTask(unit: ()->Unit){
-        val lock = Lock()
-
-        Bukkit.getScheduler().runTask(DungeonTower.plugin, Runnable {
-            unit.invoke()
-            lock.unlock()
-        })
-
-        lock.lock()
-    }
 
     protected fun clearDungeonItems(p: Player) {
         fun clearDungeonItem(itemStack: ItemStack?) {

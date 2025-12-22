@@ -1,8 +1,12 @@
 package tororo1066.dungeontower.task
 
 import com.destroystokyo.paper.event.player.PlayerStopSpectatingEntityEvent
+import com.github.shynixn.mccoroutine.bukkit.asyncDispatcher
+import com.github.shynixn.mccoroutine.bukkit.minecraftDispatcher
+import com.github.shynixn.mccoroutine.bukkit.ticks
 import com.sk89q.worldedit.bukkit.BukkitWorld
 import com.sk89q.worldguard.protection.regions.GlobalProtectedRegion
+import kotlinx.coroutines.*
 import net.kyori.adventure.text.Component
 import org.bukkit.*
 import org.bukkit.block.Container
@@ -30,12 +34,13 @@ import tororo1066.dungeontower.data.PartyData
 import tororo1066.dungeontower.data.TowerData
 import tororo1066.dungeontower.dmonitor.workspace.FloorWorkspace
 import tororo1066.dungeontower.logging.TowerLogDB
+import tororo1066.tororopluginapi.SJavaPlugin
 import tororo1066.tororopluginapi.SStr
 import tororo1066.tororopluginapi.utils.DateType
 import tororo1066.tororopluginapi.utils.toJPNDateStr
 import tororo1066.tororopluginapi.utils.toPlayer
 import java.util.UUID
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
 
 class DungeonTowerTask(
     party: PartyData,
@@ -49,11 +54,11 @@ class DungeonTowerTask(
     private val goalPlayers = ArrayList<UUID>()
     private val moveLockPlayers = ArrayList<UUID>()
 
-    private var end = false
+    private var end = AtomicBoolean(false)
     private var unlockedChest = false
     private var createFloorNow = false
 
-//    private val rootParent = party.parent
+    private val scope = CoroutineScope(SupervisorJob() + SJavaPlugin.plugin.asyncDispatcher)
 
     lateinit var world: World
 
@@ -75,8 +80,8 @@ class DungeonTowerTask(
 
     @Synchronized
     fun complete(message: SStr) {
-        if (end) return
-        end = true
+        if (end.get()) return
+        end.set(true)
         TowerLogDB.clearDungeon(party, tower.internalName)
         party.broadCast(message)
         party.players.keys.forEach {
@@ -86,38 +91,46 @@ class DungeonTowerTask(
             }
             dungeonItemToItem(it.toPlayer()?:return@forEach)
         }
-        end()
+//        end()
+        scope.launch {
+            end()
+        }
     }
 
     fun fail(message: SStr) {
         TowerLogDB.annihilationDungeon(party, tower.internalName)
         party.broadCast(message)
-        end()
+//        end()
+        scope.launch {
+            end()
+        }
     }
 
-    private fun end() {
-        val function = {
-            end = true
+    private suspend fun end() {
+        end.set(true)
+        sEvent.unregisterAll()
+
+        withContext(SJavaPlugin.plugin.asyncDispatcher) {
+            nowFloor.removeFloor(world)
+        }
+
+        withContext(SJavaPlugin.plugin.minecraftDispatcher) {
             party.players.forEach { (uuid, _) ->
-                val p = uuid.toPlayer()
-                p?.let {
-                    clearDungeonItems(it)
-                }
-                if (p?.gameMode == GameMode.SPECTATOR){
+                val p = uuid.toPlayer() ?: return@forEach
+                clearDungeonItems(p)
+                if (p.gameMode == GameMode.SPECTATOR){
                     p.spectatorTarget = null
                     p.gameMode = GameMode.SURVIVAL
                 }
-                p?.teleport(lobbyLocation)
-                p?.scoreboard = Bukkit.getScoreboardManager().newScoreboard
+                p.teleport(DungeonTower.lobbyLocation)
+                p.scoreboard = Bukkit.getScoreboardManager().newScoreboard
             }
 
             party.players.keys.forEach { uuid ->
                 moveLockPlayers.remove(uuid)
             }
             nowFloor.killMobs(world)
-            nowFloor.removeFloor(world)
 
-            sEvent.unregisterAll()
             DungeonTower.regionContainer.get(BukkitWorld(world))?.removeRegion("__global__")
             if (DungeonTower.worldUsage == WorldUsage.CREATE_AND_DELETE){
                 EmptyWorldGenerator.deleteWorld(world, DungeonTower.lobbyLocation).thenAccept { result ->
@@ -127,25 +140,16 @@ class DungeonTowerTask(
                     }
                 }
             }
-
-            nextFloorPlayers.clear()
-            currentPlayerFloor.clear()
-            enteredFloors.clear()
-            publicEnteredFloors.clear()
-            exitedFloors.clear()
-            publicExitedFloors.clear()
-
-            interrupt()
-
-            party.players.keys.forEach {
-                DungeonTower.partiesData.remove(it)
-                DungeonTower.playNow.remove(it)
-            }
-            party.currentTask = null
         }
-        Bukkit.getScheduler().runTaskLater(DungeonTower.plugin, Runnable {
-            function.invoke()
-        }, 0)
+
+        party.currentTask = null
+
+        party.players.keys.forEach {
+            DungeonTower.partiesData.remove(it)
+            DungeonTower.playNow.remove(it)
+        }
+
+        scope.cancel()
     }
 
     private fun runTrigger(name: String, player: Player, floor: FloorData) {
@@ -169,7 +173,13 @@ class DungeonTowerTask(
         }
     }
 
-    override fun run() {
+    fun start() {
+        scope.launch {
+            run()
+        }
+    }
+
+    suspend fun run() {
         if (party.players.isEmpty()) return
         TowerLogDB.insertPartyData(party)
         TowerLogDB.enterDungeon(party, tower.internalName)
@@ -178,7 +188,7 @@ class DungeonTowerTask(
         party.broadCast(SStr("&c${tower.name}&aにテレポート中..."))
         nowFloor = firstFloor?.first?:tower.randomFloor()
 
-        runTask {
+        withContext(SJavaPlugin.plugin.minecraftDispatcher) {
             val emptyWorld = when(DungeonTower.worldUsage) {
                 WorldUsage.REUSE -> {
                     val usingWorlds = DungeonTower.partiesData.values.mapNotNull {
@@ -247,7 +257,10 @@ class DungeonTowerTask(
                     moveLockPlayers.add(uuid)
                 }
                 TowerLogDB.annihilationDungeon(party, tower.internalName)
-                end()
+//                end()
+                scope.launch {
+                    end()
+                }
             }
         }
 
@@ -260,16 +273,18 @@ class DungeonTowerTask(
             if (!party.players.containsKey(e.player.uniqueId))return@register
             nextFloorPlayers.entries.removeIf { it.value.contains(e.player.uniqueId) }
             clearDungeonItems(e.player)
-            if (party.parent == e.player.uniqueId){
-                val randomParent = party.players.entries.filter { it.key != e.player.uniqueId }.randomOrNull()?.key
-                if (randomParent != null){
-                    party.parent = randomParent
-                }
-            }
             if (e.player.gameMode == GameMode.SPECTATOR){
                 e.player.gameMode = GameMode.SURVIVAL
             }
             party.players.remove(e.player.uniqueId)
+            if (party.parent == e.player.uniqueId){
+                val randomParent = party.players.entries.filter { it.key != e.player.uniqueId }.randomOrNull()?.key
+                if (randomParent != null){
+                    party.parent = randomParent
+                    DungeonTower.partiesData[randomParent] = party
+                }
+            }
+
             DungeonTower.partiesData.remove(e.player.uniqueId)
 
             DungeonTower.playNow.remove(e.player.uniqueId)
@@ -281,7 +296,10 @@ class DungeonTowerTask(
             if (party.alivePlayers.isEmpty()){
                 party.broadCast(SStr("&c生きているプレイヤーが退出したため敗北扱いになりました"))
                 TowerLogDB.quitDisbandDungeon(party, tower.internalName)
-                end()
+//                end()
+                scope.launch {
+                    end()
+                }
                 return@register
             }
         }
@@ -401,14 +419,13 @@ class DungeonTowerTask(
                         nowFloorNum++
 
                         nowFloor.killMobs(world)
-//                        nowFloor.removeFloor(world)
 
-                        CompletableFuture.runAsync {
+                        scope.launch {
                             nowFloor.removeFloor(world)
-                            nowFloor = floor.randomSubFloor(nowFloorNum)
-                            nowFloor.generateFloor(tower, world, nowFloorNum, party).join()
-                            if (isInterrupted) return@runAsync
-                            DungeonTower.util.runTask {
+                            val newFloor = floor.randomSubFloor(nowFloorNum)
+                            newFloor.generateFloor(tower, world, nowFloorNum, party)
+                            withContext(SJavaPlugin.plugin.minecraftDispatcher) {
+                                nowFloor = newFloor
                                 nowFloor.activate()
                                 unlockedChest = false
                                 party.teleport(nowFloor.previousFloorStairs.random().add(0.0,1.1,0.0)).thenAccept {
@@ -439,9 +456,10 @@ class DungeonTowerTask(
             }
         }
 
-        nowFloor.generateFloor(tower, world, nowFloorNum, party).join()
+        nowFloor.generateFloor(tower, world, nowFloorNum, party)
         scoreboardTitle = tower.name
-        runTask {
+
+        withContext(SJavaPlugin.plugin.minecraftDispatcher) {
             nowFloor.activate()
 
             party.smokeStan(60)
@@ -450,16 +468,15 @@ class DungeonTowerTask(
         callCommand(nowFloor)
 
 
-        sleep(3000)
+        delay(60.ticks)
 
-        while (!end){
+        while (!end.get()){
 
             val time = if (!createFloorNow) nowFloor.time-- else nowFloor.time
 
-            DungeonTower.util.runTask {
-
+            withContext(SJavaPlugin.plugin.minecraftDispatcher) {
                 for (uuid in party.players.keys) {
-                    val player = uuid.toPlayer()?:return@runTask
+                    val player = uuid.toPlayer()?:continue
 
                     val currentFloor = getInFloor(nowFloor, player)
                     if (currentFloor != null){
@@ -552,11 +569,7 @@ class DungeonTowerTask(
                 end()
             }
 
-            try {
-                sleep(1000)
-            } catch (_: InterruptedException){
-
-            }
+            delay(20.ticks)
         }
 
     }

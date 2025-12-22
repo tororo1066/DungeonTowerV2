@@ -60,26 +60,12 @@ class CustomWeapon private constructor(val wand: Wand) {
             section.set("level", 1)
             section.set("current_max_level", 1)
 
-            val currentLevelData = levelData.entries.firstOrNull { it.key.contains(1) }?.value
             val lore = wand.getStringList("lore")?.toMutableList() ?: mutableListOf()
-            if (currentLevelData != null) {
-                lore.add("")
-                lore.add("§aレベル: §d1")
-                lore.add("§7属性: ${Attribute.createElementAttributeString(currentLevelData.elementAttributes)}")
-                lore.add("§7武器属性: ${Attribute.createWeaponAttributeString(currentLevelData.weaponAttributes)}")
-            } else {
-                lore.add("")
-                lore.add("§aレベル: §d1")
-                lore.add("§7属性: なし")
-                lore.add("§7武器属性: なし")
-            }
+            lore.addAll(getWeaponLore(lineBreak = true))
 
             section.set("lore", lore)
 
             wand.upgrade(section)
-//            val mage = wand.mage
-//            wand.deactivate()
-//            mage?.checkWand()
         } else {
             level = wand.getInt("level")
             currentMaxLevel = wand.getInt("current_max_level")
@@ -115,37 +101,44 @@ class CustomWeapon private constructor(val wand: Wand) {
     }
 
     fun updateLore() {
-        val currentLevelData = getCurrentLevelData()
         val lore = wand.getStringList("lore")?.toMutableList() ?: mutableListOf()
-        if (currentLevelData != null) {
-            lore[lore.size - 3] = "§aレベル: §d$level"
-            lore[lore.size - 2] = "§7属性: ${Attribute.createElementAttributeString(currentLevelData.elementAttributes)}"
-            lore[lore.size - 1] = "§7武器属性: ${Attribute.createWeaponAttributeString(currentLevelData.weaponAttributes)}"
+        val weaponLore = getWeaponLore(lineBreak = false)
+        if (lore.size >= 3) {
+            lore[lore.size - 3] = weaponLore[0]
+            lore[lore.size - 2] = weaponLore[1]
+            lore[lore.size - 1] = weaponLore[2]
         } else {
-            lore[lore.size - 3] = "§aレベル: §d$level"
-            lore[lore.size - 2] = "§7属性: なし"
-            lore[lore.size - 1] = "§7武器属性: なし"
+            lore.addAll(weaponLore)
         }
         wand.configure("lore", lore)
     }
 
-    fun getWeaponLore(): List<String> {
+    fun getWeaponLore(lineBreak: Boolean): List<String> {
         val currentLevelData = getCurrentLevelData()
 
-        return if (currentLevelData != null) {
-            listOf(
-                "",
-                "§aレベル: §d$level",
-                "§7属性: ${Attribute.createElementAttributeString(currentLevelData.elementAttributes)}",
-                "§7武器属性: ${Attribute.createWeaponAttributeString(currentLevelData.weaponAttributes)}"
+        val loreList = mutableListOf<String>()
+        if (lineBreak) {
+            loreList.add("")
+        }
+
+        if (currentLevelData != null) {
+            loreList.addAll(
+                listOf(
+                    "§aレベル: §d$level",
+                    "§7属性: ${Attribute.createElementAttributeString(currentLevelData.elementAttributes)}",
+                    "§7武器属性: ${Attribute.createWeaponAttributeString(currentLevelData.weaponAttributes)}"
+                )
             )
         } else {
-            listOf(
-                "",
-                "§aレベル: §d$level",
-                "§7属性: なし",
-                "§7武器属性: なし"
+            loreList.addAll(
+                listOf(
+                    "§aレベル: §d$level",
+                    "§7属性: なし",
+                    "§7武器属性: なし"
+                )
             )
         }
+
+        return loreList
     }
 }

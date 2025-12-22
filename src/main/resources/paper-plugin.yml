@@ -19,9 +19,12 @@ dependencies:
     Multiverse-Core:
       load: BEFORE
       required: false
+      join-classpath: false
     Multiverse-Portals:
       load: BEFORE
       required: false
+      join-classpath: false
     MultiWorld:
       load: BEFORE
       required: false
+      join-classpath: false

@@ -12,7 +12,7 @@ class AppendDungeonLore: CompoundAction() {
         val wand = context.wand as? Wand ?: return SpellResult.NO_TARGET
         val customWeapon = CustomWeapon.getWeapon(wand) ?: return SpellResult.NO_TARGET
         val lore = wand.getStringList("lore")?.toMutableList() ?: mutableListOf()
-        lore.addAll(customWeapon.getWeaponLore())
+        lore.addAll(customWeapon.getWeaponLore(lineBreak = true))
         wand.setProperty("lore", lore)
         return SpellResult.CAST
     }

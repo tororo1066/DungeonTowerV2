@@ -3,7 +3,6 @@ package tororo1066.dungeontower.data
 import org.bukkit.Location
 import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
-import org.bukkit.scoreboard.Scoreboard
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.task.DungeonTowerTask
 import tororo1066.tororopluginapi.SStr

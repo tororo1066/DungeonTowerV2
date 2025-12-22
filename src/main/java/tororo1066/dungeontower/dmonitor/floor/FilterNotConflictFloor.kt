@@ -1,14 +1,6 @@
 package tororo1066.dungeontower.dmonitor.floor
 
-import org.bukkit.Bukkit
-import org.bukkit.Location
-import org.bukkit.Material
-import org.bukkit.entity.ItemDisplay
-import org.bukkit.inventory.ItemStack
-import org.bukkit.util.Transformation
 import org.bukkit.util.Vector
-import org.joml.Quaternionf
-import org.joml.Vector3f
 import tororo1066.displaymonitorapi.actions.ActionResult
 import tororo1066.displaymonitorapi.actions.IAbstractAction
 import tororo1066.displaymonitorapi.actions.IActionContext

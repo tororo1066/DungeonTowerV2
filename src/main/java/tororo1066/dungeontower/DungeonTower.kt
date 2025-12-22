@@ -2,9 +2,13 @@ package tororo1066.dungeontower
 
 import com.elmakers.mine.bukkit.action.ActionFactory
 import com.elmakers.mine.bukkit.api.magic.MagicAPI
+import com.github.shynixn.mccoroutine.bukkit.asyncDispatcher
 import com.sk89q.worldguard.WorldGuard
 import com.sk89q.worldguard.protection.regions.RegionContainer
 import io.lumine.mythic.bukkit.BukkitAPIHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.NamespacedKey
@@ -84,6 +88,10 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
         const val DUNGEON_LOOT_REMOVE_ON_DEATH = "dlootremoveondeath"
 
         const val DUNGEON_MOB = "dmob"
+
+        val scope by lazy {
+            CoroutineScope(SupervisorJob() + plugin.asyncDispatcher)
+        }
 
         fun CommandSender.sendPrefixMsg(str: SStr){
             this.sendMessage(prefix + str)
@@ -216,5 +224,6 @@ class DungeonTower: SJavaPlugin(UseOption.SConfig) {
 
     override fun onEnd() {
         TowerLogDB.database.close()
+        scope.cancel()
     }
 }

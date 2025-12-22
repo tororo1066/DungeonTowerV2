@@ -26,7 +26,7 @@ object TowerLogDB {
 
     fun createTables() {
         if (!database.isMongo) {
-            database.createTable("party_log",
+            database.backGroundCreateTable("party_log",
                 mapOf(
                     "id" to SDBVariable(SDBVariable.Int, autoIncrement = true),
                     "party_uuid" to SDBVariable(SDBVariable.VarChar, length = 36, nullable = false, index = SDBVariable.Index.UNIQUE),
@@ -37,7 +37,7 @@ object TowerLogDB {
             )
         }
 
-        database.createTable("tower_log",
+        database.backGroundCreateTable("tower_log",
             mapOf(
                 "id" to SDBVariable(SDBVariable.Int, autoIncrement = true),
                 "party_uuid" to SDBVariable(SDBVariable.VarChar, length = 36,false,SDBVariable.Index.KEY),
@@ -70,7 +70,7 @@ object TowerLogDB {
         }
     }
 
-    fun anyAction(partyData: PartyData, action: String, value: String){
+    fun anyAction(partyData: PartyData, action: String, value: String) {
         if (database.isMongo){
             database.backGroundUpdate("tower_log",
                 Updates.push("actions",
@@ -92,10 +92,20 @@ object TowerLogDB {
         return if (database.isMongo) {
             val ips = database.select("tower_log", SDBCondition().equal("users.uuid", uuid.toString()))
                 .flatMap { it.getList<Document>("users") }
-                .map { it.getString("ip") }.distinct()
+                .mapNotNull {
+                    val ip = it.getString("ip")
+                    if (it.getString("uuid") == uuid.toString()) ip else null
+                }.distinct()
+//                .map { it.getString("ip") }.distinct()
             database.select("tower_log", SDBCondition().include("users.ip", ips))
                 .flatMap { it.getList<Document>("users") }
-                .map { UUID.fromString(it.getString("uuid")) }.distinct()
+                .mapNotNull {
+                    val foundUUID = UUID.fromString(it.getString("uuid"))
+                    val ip = it.getString("ip")
+                    if (ips.contains(ip)) foundUUID else null
+
+                }.distinct()
+//                .map { UUID.fromString(it.getString("uuid")) }.distinct()
         } else {
             val ips = database.select("party_log", SDBCondition().like("uuid", uuid.toString()))
                 .flatMap { it.getString("ip").split("\r\n") }.distinct()

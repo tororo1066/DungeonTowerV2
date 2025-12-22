@@ -1,9 +1,11 @@
 package tororo1066.dungeontower.data
 
+import kotlinx.coroutines.future.await
 import org.bukkit.GameRule
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
+import tororo1066.displaymonitorapi.actions.IActionContext
 import tororo1066.dungeontower.DungeonTower
 import tororo1066.dungeontower.DungeonTower.Companion.sendPrefixMsg
 import tororo1066.dungeontower.command.DungeonCommand
@@ -11,7 +13,6 @@ import tororo1066.dungeontower.dmonitor.workspace.TowerWorkspace
 import tororo1066.dungeontower.task.DungeonTowerTask
 import tororo1066.tororopluginapi.SStr
 import java.io.File
-import java.util.concurrent.CompletableFuture
 import kotlin.random.Random
 import kotlin.random.nextInt
 
@@ -42,6 +43,23 @@ class TowerData: Cloneable {
         GameRule.KEEP_INVENTORY to true,
     )
 
+    private fun createActionContext(p: Player, partyData: PartyData): IActionContext {
+        val context = DungeonTower.actionStorage.createActionContext(
+            DungeonTower.actionStorage.createPublicContext().apply {
+                parameters["entry.name"] = p.name
+                parameters["entry.uuid"] = p.uniqueId.toString()
+                parameters["entry.ip"] = p.address?.address?.hostAddress ?: "Unknown"
+                parameters["party.uuid"] = partyData.partyUUID.toString()
+                workspace = TowerWorkspace
+            }
+        ).apply {
+            target = p
+            location = p.location
+        }
+
+        return context
+    }
+
     fun randomFloor(): FloorData {
         val random = Random.nextInt(1..1000000)
         var preventRandom = 0
@@ -54,32 +72,20 @@ class TowerData: Cloneable {
         throw NullPointerException("Couldn't find floor. Maybe sum percentage is not 1000000.")
     }
 
-    fun entryTower(p: Player, partyData: PartyData): CompletableFuture<Void> {
+    suspend fun entryTower(p: Player, partyData: PartyData) {
         DungeonCommand.entryCooldown.add(p.uniqueId)
-        return canChallenge(p, partyData).thenAcceptAsync { bool ->
-            if (!bool) return@thenAcceptAsync
+        try {
+            if (!canChallenge(p, partyData)) {
+                DungeonCommand.entryCooldown.remove(p.uniqueId)
+                return
+            }
             if (entryScript != null){
                 val script = TowerWorkspace.actionConfigurations[entryScript]
+                    ?: throw NullPointerException("Entry script $entryScript not found in TowerWorkspace.")
 
-                if (script == null) {
-                    p.sendPrefixMsg(SStr("&c入場時に実行するスクリプトが見つかりません"))
-                    DungeonCommand.entryCooldown.remove(p.uniqueId)
-                    return@thenAcceptAsync
-                }
+                val context = createActionContext(p, partyData)
 
-                val context = DungeonTower.actionStorage.createActionContext(
-                    DungeonTower.actionStorage.createPublicContext().apply {
-                        parameters["entry.name"] = p.name
-                        parameters["entry.uuid"] = p.uniqueId.toString()
-                        parameters["entry.ip"] = p.address.address.hostAddress
-                        parameters["party.uuid"] = partyData.partyUUID.toString()
-                        workspace = TowerWorkspace
-                    }
-                ).apply {
-                    target = p
-                    location = p.location
-                }
-                script.run(context, true, null).join()
+                script.run(context, true, null).await()
 
                 val floorNum = (context.publicContext.parameters["entry.floor.num"] as? Int)
                 val floorName = context.publicContext.parameters["entry.floor.name"] as? String
@@ -98,94 +104,65 @@ class TowerData: Cloneable {
                     DungeonTowerTask(partyData, this).start()
                 }
             }
-
-            DungeonCommand.entryCooldown.remove(p.uniqueId)
-        }.exceptionally { ex ->
+        } catch (ex: Exception) {
             p.sendPrefixMsg(SStr("&cタワーへの入場中にエラーが発生しました"))
             DungeonTower.plugin.logger.warning("Error while $internalName entry tower for ${p.name} (${p.uniqueId})")
             ex.printStackTrace()
+        } finally {
             DungeonCommand.entryCooldown.remove(p.uniqueId)
-            null
         }
     }
 
-    fun canChallenge(p: Player, partyData: PartyData): CompletableFuture<Boolean> {
+    suspend fun canChallenge(p: Player, partyData: PartyData): Boolean {
         if (playerLimit != -1 && DungeonTower.partiesData.count { it.value != null && it.value!!.currentTask?.tower?.internalName == internalName } >= playerLimit){
             p.sendPrefixMsg(SStr("&4最大並行プレイ人数の上限に達しています"))
-            DungeonCommand.entryCooldown.remove(p.uniqueId)
-            return CompletableFuture.completedFuture(false)
+            return false
         }
 
         if (partyLimit != -1 && partyData.players.size > partyLimit){
             p.sendPrefixMsg(SStr("&4${partyLimit}人以下でしか入れません (現在:${partyData.players.size}人)"))
-            DungeonCommand.entryCooldown.remove(p.uniqueId)
-            return CompletableFuture.completedFuture(false)
+            return false
         }
-
-        var completableFuture = CompletableFuture.completedFuture(true)
 
         if (challengeScript != null){
             val script = TowerWorkspace.actionConfigurations[challengeScript]
                 ?: throw NullPointerException("Challenge script $challengeScript not found in TowerWorkspace.")
-            completableFuture = completableFuture.thenApplyAsync {
-                val context = DungeonTower.actionStorage.createActionContext(
-                    DungeonTower.actionStorage.createPublicContext().apply {
-                        parameters["entry.name"] = p.name
-                        parameters["entry.uuid"] = p.uniqueId.toString()
-                        parameters["entry.ip"] = p.address.address.hostAddress
-                        parameters["party.uuid"] = partyData.partyUUID.toString()
-                        workspace = TowerWorkspace
-                    }
-                ).apply {
-                    target = p
-                    location = p.location
-                }
-                script.run(
-                    context,
-                    true,
-                    null
-                ).join()
 
-                val allowed = context.publicContext.parameters["entry.allowed"] as? Boolean ?: true
-                if (!allowed) {
-                    p.sendPrefixMsg(SStr("§c挑戦するための条件を満たしていません！"))
-                    DungeonCommand.entryCooldown.remove(p.uniqueId)
-                    return@thenApplyAsync false
-                } else {
-                    DungeonCommand.entryCooldown.remove(p.uniqueId)
-                    return@thenApplyAsync true
-                }
+            val context = createActionContext(p, partyData)
+
+            script.run(
+                context,
+                true,
+                null
+            ).await()
+
+            val allowed = context.publicContext.parameters["entry.allowed"] as? Boolean ?: true
+            if (!allowed) {
+                p.sendPrefixMsg(SStr("§c挑戦するための条件を満たしていません！"))
+                return false
             }
-
         }
 
         if (challengeItem != null){
-            completableFuture = completableFuture.thenApplyAsync { bool ->
-                if (!bool) return@thenApplyAsync false
-                val filter = p.inventory.filter { it?.isSimilar(challengeItem) == true }
-                if (filter.isEmpty() || filter.sumOf { it.amount } < challengeItem!!.amount){
-                    p.sendPrefixMsg(SStr("§c挑戦するためのアイテムがありません！"))
-                    DungeonCommand.entryCooldown.remove(p.uniqueId)
-                    return@thenApplyAsync false
-                }
-
-                var amount = challengeItem!!.amount
-                for (item in filter){
-                    if (item.amount < amount){
-                        amount -= item.amount
-                        item.amount = 0
-                    } else {
-                        item.amount -= amount
-                        break
-                    }
-                }
-
-                DungeonCommand.entryCooldown.remove(p.uniqueId)
-                return@thenApplyAsync true
+            val filter = p.inventory.filter { it?.isSimilar(challengeItem) == true }
+            if (filter.isEmpty() || filter.sumOf { it.amount } < challengeItem!!.amount){
+                p.sendPrefixMsg(SStr("§c挑戦するためのアイテムがありません！"))
+                return false
             }
-        }
 
-        return completableFuture
+            var amount = challengeItem!!.amount
+            for (item in filter){
+                if (item.amount < amount){
+                    amount -= item.amount
+                    item.amount = 0
+                } else {
+                    item.amount -= amount
+                    break
+                }
+            }
+
+        }
+        return true
     }
 
     public override fun clone(): TowerData {

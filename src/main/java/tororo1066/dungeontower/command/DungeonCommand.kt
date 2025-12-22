@@ -2,6 +2,7 @@ package tororo1066.dungeontower.command
 
 import com.elmakers.mine.bukkit.magic.Mage
 import com.elmakers.mine.bukkit.wand.Wand
+import kotlinx.coroutines.launch
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
@@ -93,9 +94,16 @@ class DungeonCommand: SCommand(
 
         if (!DungeonTower.partiesData.containsKey(it.sender.uniqueId)){
             if (tower.autoCreateParty) {
+
+                val ip = it.sender.address?.address?.hostAddress
+                if (ip == null) {
+                    it.sender.sendPrefixMsg(SStr("&cプレイヤーの情報の取得に失敗しました"))
+                    return@setPlayerExecutor
+                }
+
                 DungeonTower.partiesData[it.sender.uniqueId] = PartyData().apply {
                     parent = it.sender.uniqueId
-                    players[it.sender.uniqueId] = UserData(it.sender.uniqueId, it.sender.name, it.sender.address.address.hostAddress)
+                    players[it.sender.uniqueId] = UserData(it.sender.uniqueId, it.sender.name, ip)
                 }
             } else {
                 it.sender.sendPrefixMsg(SStr("&cパーティに参加していません"))
@@ -109,7 +117,9 @@ class DungeonCommand: SCommand(
 
         val partyData = DungeonTower.partiesData[it.sender.uniqueId]!!
 
-        tower.entryTower(it.sender,partyData)
+        DungeonTower.scope.launch {
+            tower.entryTower(it.sender, partyData)
+        }
     }
 
     @SCommandBody
@@ -125,17 +135,24 @@ class DungeonCommand: SCommand(
     @SCommandBody
     val createParty = command().addArg(SCommandArg("party")).addArg(SCommandArg("create"))
         .setPlayerExecutor {
-            if (DungeonTower.playNow.contains(it.sender.uniqueId)){
+            if (DungeonTower.playNow.contains(it.sender.uniqueId)) {
                 it.sender.sendPrefixMsg(SStr("&cダンジョンに参加しています"))
                 return@setPlayerExecutor
             }
-            if (DungeonTower.partiesData.containsKey(it.sender.uniqueId)){
+            if (DungeonTower.partiesData.containsKey(it.sender.uniqueId)) {
                 it.sender.sendPrefixMsg(SStr("&c既にパーティーに参加しています"))
                 return@setPlayerExecutor
             }
+
+            val ip = it.sender.address?.address?.hostAddress
+            if (ip == null) {
+                it.sender.sendPrefixMsg(SStr("&cプレイヤーの情報の取得に失敗しました"))
+                return@setPlayerExecutor
+            }
+
             val party = PartyData()
             party.parent = it.sender.uniqueId
-            party.players[it.sender.uniqueId] = UserData(it.sender.uniqueId,it.sender.name,it.sender.address.address.hostAddress)
+            party.players[it.sender.uniqueId] = UserData(it.sender.uniqueId, it.sender.name, ip)
             DungeonTower.partiesData[it.sender.uniqueId] = party
             it.sender.sendPrefixMsg(SStr("&aパーティーを作成しました！"))
         }
@@ -192,8 +209,15 @@ class DungeonCommand: SCommand(
                 return@setPlayerExecutor
             }
             accepts[it.sender.uniqueId]!!.remove(p.uniqueId)
+
+            val ip = p.address?.address?.hostAddress
+            if (ip == null){
+                it.sender.sendPrefixMsg(SStr("&cプレイヤーの情報の取得に失敗しました"))
+                return@setPlayerExecutor
+            }
+
             val party = DungeonTower.partiesData[it.sender.uniqueId]!!
-            party.players[p.uniqueId] = UserData(p.uniqueId,p.name,p.address.address.hostAddress)
+            party.players[p.uniqueId] = UserData(p.uniqueId,p.name,ip)
             DungeonTower.partiesData[p.uniqueId] = null
             it.sender.sendPrefixMsg(SStr("&a${p.name}をパーティーに追加しました"))
             party.broadCast(SStr("&a${p.name}がパーティーに参加しました"))
